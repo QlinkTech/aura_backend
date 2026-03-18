@@ -1,0 +1,34 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from app.routes.auth import auth_router
+from app.routes.user import user_router
+from app.routes.systems import system_router
+
+app = FastAPI(
+    title="Menifest my dreams - qlink",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+ 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/ping", tags=["Health"])
+def ping():
+    return {"status": "ok", "message": "MMD - Qlink backend is running perfectly fine."}
+
+app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+app.include_router(user_router, prefix="/api/user", tags=["User"])
+app.include_router(system_router, prefix="/api/system", tags=["Systems"])
+
+if __name__ == "__main__":
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,0 +1,28 @@
+from pydantic import BaseModel
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class GenerateVisionModel(BaseModel):
+    email: str
+    name: str
+    answers: dict
+    vibe: dict
+    password: str
+
+class ReGenerateVisionModel(BaseModel):
+    email: str
+    answers: dict
+    vibe: dict
+
+class ChatModel(BaseModel):
+    email: str
+    message: str
+
+class PromptModel(BaseModel):
+    prompt: str

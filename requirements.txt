@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+python-dotenv
+pymongo
+openai
+requests
+pinecone
+cloudinary
+pyjwt
+python-multipart
+PyPDF2
+pydantic
+aiofiles
+
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+setuptools<70
