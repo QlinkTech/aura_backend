@@ -16,3 +16,5 @@ cloud_api_secret=os.getenv("CLOUDINARY_API_SECRET")
 
 username = os.environ.get("LOGIN_USERNAME")
 password = os.environ.get("LOGIN_PASS")
+
+razorpay_webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")

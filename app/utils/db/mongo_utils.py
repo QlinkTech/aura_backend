@@ -8,6 +8,7 @@ mongo_client = MongoClient(mongodb_uri)
 db = mongo_client["mmd"]
 user_profile = db["user_profile"]
 system = db["systems"]
+payments = db["payments"]
 
 def create_account(email: str, password: str):
     try:

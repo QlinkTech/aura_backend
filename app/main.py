@@ -4,6 +4,7 @@ import uvicorn
 from app.routes.auth import auth_router
 from app.routes.user import user_router
 from app.routes.systems import system_router
+from app.routes.payment import payment_router
 
 app = FastAPI(
     title="Menifest my dreams - qlink",
@@ -29,6 +30,7 @@ def ping():
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(user_router, prefix="/api/user", tags=["User"])
 app.include_router(system_router, prefix="/api/system", tags=["Systems"])
+app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
