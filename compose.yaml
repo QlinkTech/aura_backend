@@ -10,14 +10,14 @@ services:
     restart: always
     volumes:
       - logs:/app/logs
-      - ./onereside_chatbot:/app/onereside_chatbot
+      - ./app:/app/app
     ports:
       - "8000:8000"
     environment:
       - ENV_MODE=${ENV_MODE}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MONGO_URI=${MONGO_URI}
-    command: ["uvicorn", "onereside_chatbot.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/onereside_chatbot"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
     env_file:
       - .env
 

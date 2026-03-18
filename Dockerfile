@@ -29,7 +29,7 @@ FROM base AS final
 
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 
-COPY onereside_chatbot /app/onereside_chatbot
+COPY app /app/app
 
 ARG UID=10001
 RUN adduser \
@@ -48,4 +48,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "onereside_chatbot.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
