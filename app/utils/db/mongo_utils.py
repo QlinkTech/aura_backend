@@ -114,6 +114,31 @@ def get_user_details(email: str):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     
     
+def check_user_exists(email: str):
+    try:
+        email = email.lower()
+        user = user_profile.find_one({"email": email}, {"_id": 1})
+        return {"exists": user is not None}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+def reset_password(email: str, new_password: str):
+    try:
+        email = email.lower()
+        user = user_profile.find_one({"email": email}, {"_id": 1})
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        hashed_pw = hash_password(new_password)
+        user_profile.update_one(
+            {"email": email},
+            {"$set": {"password": hashed_pw, "updated_at": datetime.utcnow()}}
+        )
+        return {"message": "Password reset successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 def return_system_prompt():
     """Returns system prompt."""
     try:

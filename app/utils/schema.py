@@ -26,3 +26,10 @@ class ChatModel(BaseModel):
 
 class PromptModel(BaseModel):
     prompt: str
+
+class CheckUserRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str

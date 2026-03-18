@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks
-from app.utils.schema import RegisterRequest, LoginRequest, GenerateVisionModel
-from app.utils.db.mongo_utils import create_account, login, update_vision_board, hash_password, create_access_token
+from app.utils.schema import RegisterRequest, LoginRequest, GenerateVisionModel, CheckUserRequest, ResetPasswordRequest
+from app.utils.db.mongo_utils import create_account, login, update_vision_board, hash_password, create_access_token, check_user_exists, reset_password
 from app.core.vision_board.genrate_vision_board import generate_vision_background
 
 auth_router = APIRouter()
@@ -43,3 +43,11 @@ def generate_vision(data: GenerateVisionModel, background_tasks: BackgroundTasks
     background_tasks.add_task(generate_vision_background, email, data.answers, data.vibe)
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+@auth_router.post("/check-user")
+def check_user(payload: CheckUserRequest):
+    return check_user_exists(payload.email)
+
+@auth_router.post("/reset-password")
+def reset_user_password(payload: ResetPasswordRequest):
+    return reset_password(payload.email, payload.new_password)
