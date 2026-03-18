@@ -50,8 +50,12 @@ def save_payment_failed(payment: dict):
 
 def save_subscription_event(event: str, subscription: dict):
     subscription_id = subscription.get("id")
-    # Razorpay puts email in email_id for subscriptions
-    email = (subscription.get("email_id") or subscription.get("email") or "").lower()
+    email = (
+        subscription.get("customer_email")
+        or subscription.get("email_id")
+        or subscription.get("email")
+        or ""
+    ).lower()
 
     status_map = {
         "subscription.activated": "active",
@@ -63,14 +67,19 @@ def save_subscription_event(event: str, subscription: dict):
     resolved_status = status_map.get(event, event)
     is_paid = event in ("subscription.activated", "subscription.charged")
 
-    payments.insert_one({
-        "subscription_id": subscription_id,
-        "email": email,
-        "status": resolved_status,
-        "event": event,
-        "raw": subscription,
-        "created_at": datetime.utcnow()
-    })
+    payments.update_one(
+        {"subscription_id": subscription_id},
+        {"$set": {
+            "email": email,
+            "status": resolved_status,
+            "event": event,
+            "raw": subscription,
+            "updated_at": datetime.utcnow(),
+        }, "$setOnInsert": {
+            "created_at": datetime.utcnow(),
+        }},
+        upsert=True
+    )
 
     if email:
         user_profile.update_one(
