@@ -33,3 +33,8 @@ class CheckUserRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: str
     new_password: str
+
+class EarlyBirdSubRequest(BaseModel):
+    email: str
+    plan_key: str
+    expire_by: int = None

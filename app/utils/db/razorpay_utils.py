@@ -1,4 +1,4 @@
-from datetime import datetime
+import time
 from pymongo import MongoClient
 from app.utils.env_load import mongodb_uri
 
@@ -24,13 +24,13 @@ def save_payment_captured(payment: dict):
         "status": "captured",
         "event": "payment.captured",
         "raw": payment,
-        "created_at": datetime.utcnow()
+        "created_at": int(time.time())
     })
 
     if email:
         user_profile.update_one(
             {"email": email},
-            {"$set": {"is_paid": True, "updated_at": datetime.utcnow()}}
+            {"$set": {"is_paid": True, "updated_at": int(time.time())}}
         )
 
 
@@ -44,7 +44,7 @@ def save_payment_failed(payment: dict):
         "status": "failed",
         "event": "payment.failed",
         "raw": payment,
-        "created_at": datetime.utcnow()
+        "created_at": int(time.time())
     })
 
 
@@ -74,19 +74,28 @@ def save_subscription_event(event: str, subscription: dict):
             "status": resolved_status,
             "event": event,
             "raw": subscription,
-            "updated_at": datetime.utcnow(),
+            "updated_at": int(time.time()),
         }, "$setOnInsert": {
-            "created_at": datetime.utcnow(),
+            "created_at": int(time.time()),
         }},
         upsert=True
     )
 
+    # Try email first, fall back to subscription_id stored on the profile
+    profile = None
     if email:
-        user_profile.update_one(
-            {"email": email},
-            {"$set": {
-                "subscription_status": resolved_status,
-                "is_paid": is_paid,
-                "updated_at": datetime.utcnow()
-            }}
-        )
+        profile = user_profile.find_one({"email": email})
+    if profile is None and subscription_id:
+        profile = user_profile.find_one({"early_bird_sub_id": subscription_id})
+
+    if profile:
+        update_fields = {
+            "subscription_status": resolved_status,
+            "is_paid": is_paid,
+            "updated_at": int(time.time()),
+        }
+        # Keep early_bird_sub_id pointing to the active subscription
+        if is_paid:
+            update_fields["early_bird_sub_id"] = subscription_id
+
+        user_profile.update_one({"_id": profile["_id"]}, {"$set": update_fields})

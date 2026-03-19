@@ -1,12 +1,24 @@
 import hmac
 import hashlib
-from fastapi import APIRouter, Request, HTTPException, status
-from app.utils.env_load import razorpay_webhook_secret
+from fastapi import APIRouter, Request, HTTPException, status, Security
+from fastapi.security import APIKeyHeader
+from app.utils.env_load import razorpay_webhook_secret, admin_api_key
 from app.utils.db.razorpay_utils import (
     save_payment_captured,
     save_payment_failed,
     save_subscription_event,
 )
+from app.utils.schema import EarlyBirdSubRequest
+from app.services.payment_gateway.utils import create_early_bird_sub_link
+
+_api_key_header = APIKeyHeader(name="X-API-Key")
+
+def _verify_api_key(key: str = Security(_api_key_header)):
+    if key != admin_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key"
+        )
 
 payment_router = APIRouter()
 
@@ -26,6 +38,15 @@ def _verify_signature(body: bytes, signature: str) -> bool:
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+@payment_router.post("/early-bird-subscription", dependencies=[Security(_verify_api_key)])
+async def early_bird_subscription(request: EarlyBirdSubRequest):
+    return create_early_bird_sub_link(
+        email=request.email,
+        plan_key=request.plan_key,
+        expire_by=request.expire_by,
+    )
 
 
 @payment_router.post("/webhook")
