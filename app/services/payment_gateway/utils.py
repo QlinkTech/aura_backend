@@ -1,7 +1,17 @@
 import time
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from app.utils.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, fetch_subscription
+
+EARLY_BIRD_TRIAL_MONTHS = 3
+
+
+def _trial_start_at() -> int:
+    """Returns Unix timestamp 3 months from now (start of billing after trial)."""
+    future = datetime.now(timezone.utc) + relativedelta(months=EARLY_BIRD_TRIAL_MONTHS)
+    return int(future.timestamp())
 
 # Subscription is active/paid — do not allow new subscription
 _PAID_STATUSES = {"active", "pending", "halted", "completed"}
@@ -13,6 +23,7 @@ def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = N
         plan_key=plan_key,
         notify_email=email,
         expire_by=expire_by,
+        start_at=_trial_start_at(),
     )
     sub_id = subscription.get("id")
     payment_link = subscription.get("short_url", "")

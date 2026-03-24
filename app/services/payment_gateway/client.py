@@ -36,7 +36,7 @@ def fetch_subscription(subscription_id: str) -> dict:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-def create_subscription(plan_key: str, notify_email: str, expire_by: int = None, notify_phone: str = None, quantity: int = 1) -> dict:
+def create_subscription(plan_key: str, notify_email: str, expire_by: int = None, start_at: int = None, notify_phone: str = None, quantity: int = 1) -> dict:
     if plan_key not in sub_plans:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -56,6 +56,8 @@ def create_subscription(plan_key: str, notify_email: str, expire_by: int = None,
         }
         if expire_by is not None:
             payload["expire_by"] = expire_by
+        if start_at is not None:
+            payload["start_at"] = start_at
 
         return gateway_client.subscription.create(payload)
     except BadRequestError as e:
