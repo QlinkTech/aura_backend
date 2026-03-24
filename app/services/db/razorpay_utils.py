@@ -2,11 +2,8 @@ import time
 from pymongo import MongoClient
 from app.utils.env_load import mongodb_uri
 from app.utils.logger_config import logger
+from app.services.db.mongo_utils import user_profile, payments
 
-mongo_client = MongoClient(mongodb_uri)
-db = mongo_client["mmd"]
-user_profile = db["user_profile"]
-payments = db["payments"]
 
 
 def save_payment_captured(payment: dict):
