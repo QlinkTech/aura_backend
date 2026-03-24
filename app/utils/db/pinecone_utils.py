@@ -3,6 +3,7 @@ import random
 import string
 from datetime import datetime
 from app.utils.env_load import pinecone_api
+from app.utils.logger_config import logger
 import re
 
 from openai import OpenAI
@@ -45,6 +46,7 @@ def upsert_data(
     """Pinecone Util Function to append new vector to the db."""
     try:
         vector_id = f"{user_id}#{_generate_id()}"
+        logger.info("Upserting user memory vector", extra={"user_id": user_id, "vector_id": vector_id})
         index.upsert(
             namespace=pinecone_namespace,
             vectors=[
@@ -52,17 +54,19 @@ def upsert_data(
                     "id": vector_id,
                     "values": vector,
                     "metadata": {
-                        "user_id": user_id, 
-                        "text": text, 
+                        "user_id": user_id,
+                        "text": text,
                         "created_at": datetime.now().isoformat()
                     }
                 }
             ]
         )
-    
+        logger.info("User memory vector upserted", extra={"user_id": user_id, "vector_id": vector_id})
+
     except Exception as e:
+        logger.error("Error upserting user memory vector", extra={"user_id": user_id, "error": str(e)})
         raise e
-    
+
 def fetch_data(
     vector: list,
     user_id: str,
@@ -70,6 +74,7 @@ def fetch_data(
 ) -> list:
     """Pinecone util function to perform similarity search in the db."""
     try:
+        logger.info("Fetching user memory vectors", extra={"user_id": user_id, "top_k": top_k})
         metadata_filter = {
             "user_id": user_id
         }
@@ -82,18 +87,20 @@ def fetch_data(
             include_metadata=True
         )
 
-        return result.get("matches", [])
-    
+        matches = result.get("matches", [])
+        logger.info("User memory vectors fetched", extra={"user_id": user_id, "matches": len(matches)})
+        return matches
+
     except Exception as e:
+        logger.error("Error fetching user memory vectors", extra={"user_id": user_id, "error": str(e)})
         raise e
-    
+
 def fetch_kb(
     vector: list,
     top_k: int = 3
 ) -> list:
     """Pinecone util function to perform similarity search in the db."""
     try:
-
         result = index.query(
             namespace=pinecone_kb_namespace,
             vector=vector,
@@ -102,10 +109,11 @@ def fetch_kb(
         )
 
         return result.get("matches", [])
-    
+
     except Exception as e:
+        logger.error("Error fetching KB vectors", extra={"error": str(e)})
         raise e
-    
+
 def upsert_kb(
     vector: list,
     text: str,
@@ -113,6 +121,7 @@ def upsert_kb(
 ) -> None:
     """Pinecone Util Function to append new vector to the db."""
     try:
+        logger.info("Upserting KB vector", extra={"doc_id": doc_id})
         index.upsert(
             namespace=pinecone_kb_namespace,
             vectors=[
@@ -120,16 +129,18 @@ def upsert_kb(
                     "id": doc_id,
                     "values": vector,
                     "metadata": {
-                        "text": text, 
+                        "text": text,
                         "created_at": datetime.now().isoformat()
                     }
                 }
             ]
         )
-    
+        logger.info("KB vector upserted", extra={"doc_id": doc_id})
+
     except Exception as e:
+        logger.error("Error upserting KB vector", extra={"doc_id": doc_id, "error": str(e)})
         raise e
-    
+
 
 def chunk_text(text, max_chars=1200, overlap=200):
     sentences = re.split(r'(?<=[.!?]) +', text)
@@ -145,7 +156,7 @@ def chunk_text(text, max_chars=1200, overlap=200):
 
     if current:
         chunks.append(current.strip())
-        
+
     final_chunks = []
     for i in range(len(chunks)):
         start = max(0, i - 1)
@@ -157,6 +168,7 @@ def chunk_text(text, max_chars=1200, overlap=200):
 
 async def fetch_records_with_metadata(query: str, top_k: int = 3):
     try:
+        logger.info("Fetching KB records with metadata", extra={"query": query, "top_k": top_k})
         vector = get_embedding(query)
         results = fetch_kb(vector, top_k)
 
@@ -171,24 +183,29 @@ async def fetch_records_with_metadata(query: str, top_k: int = 3):
         return kb
 
     except Exception as e:
+        logger.error("Error fetching KB records with metadata", extra={"query": query, "error": str(e)})
         return []
-    
+
 def delete_record_by_id(record_id: str, namespace: str = pinecone_kb_namespace):
     """Delete a record from Pinecone namespace by its ID."""
     try:
+        logger.info("Deleting Pinecone record", extra={"record_id": record_id, "namespace": namespace})
         index.delete(ids=[record_id], namespace=namespace)
+        logger.info("Pinecone record deleted", extra={"record_id": record_id})
     except Exception as e:
+        logger.error("Error deleting Pinecone record", extra={"record_id": record_id, "error": str(e)})
         raise e
-    
+
 def list_records_by_label(namespace: str = pinecone_kb_namespace):
     """Fetch all records in the given namespace filtered by label (agent/general)."""
     try:
+        logger.info("Listing Pinecone KB records", extra={"namespace": namespace})
         output = []
         meta_response = None
         response = list(index.list(namespace=namespace))
         if response:
             m_respose = index.fetch(
-                ids=response[0], 
+                ids=response[0],
                 namespace=namespace
             )
 
@@ -203,7 +220,9 @@ def list_records_by_label(namespace: str = pinecone_kb_namespace):
             output = []
             for mr in meta_response:
                 output.append(mr)
-                
+
+        logger.info("KB records listed", extra={"namespace": namespace, "count": len(output)})
         return output if output else []
     except Exception as e:
+        logger.error("Error listing KB records", extra={"namespace": namespace, "error": str(e)})
         raise e

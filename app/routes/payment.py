@@ -24,6 +24,7 @@ def _verify_api_key(key: str = Security(_api_key_header)):
 payment_router = APIRouter()
 
 SUBSCRIPTION_EVENTS = {
+    "subscription.authenticated",
     "subscription.activated",
     "subscription.charged",
     "subscription.cancelled",
@@ -66,7 +67,7 @@ async def razorpay_webhook(request: Request):
     event = payload.get("event")
     entity = payload.get("payload", {})
 
-    if event == "payment.captured":
+    if event in ("payment.captured", "payment.authorized"):
         payment = entity.get("payment", {}).get("entity", {})
         save_payment_captured(payment)
 

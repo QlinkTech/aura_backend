@@ -2,6 +2,7 @@
 from openai import OpenAI
 from app.utils.db.mongo_utils import add_chat_history, get_last_chat_history, return_system_prompt
 from app.utils.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb
+from app.utils.logger_config import logger
 import json
 
 
@@ -22,19 +23,22 @@ def get_embedding(text:str):
 
 def update_memory(user: str, memory: str):
     try:
+        logger.info("Updating long-term memory", extra={"user": user, "memory": memory})
         embedding = get_embedding(memory)
         upsert_data(
             user_id=user,
             vector=embedding,
             text=memory
         )
+        logger.info("Memory updated successfully", extra={"user": user})
     except Exception as e:
-        print(f"[update_memory] Error: {e}")
+        logger.error("[update_memory] Error", extra={"user": user, "error": str(e)})
         raise e
 
 
 def get_memory(user: str, memory: str):
     try:
+        logger.info("Fetching long-term memory", extra={"user": user, "query": memory})
         embedding = get_embedding(memory)
         results = fetch_data(
             user_id=user,
@@ -44,12 +48,13 @@ def get_memory(user: str, memory: str):
         for match in results:
             if 'text' in match['metadata']:
                 value.append(match['metadata']['text'])
+        logger.info("Memory fetched", extra={"user": user, "results_count": len(value)})
         return {"long_term_memory": "\n".join(value)}
-    
+
     except Exception as e:
-        print(f"[get_memory] Error: {e}")
+        logger.error("[get_memory] Error", extra={"user": user, "error": str(e)})
         raise e
-    
+
 
 def get_kb_context(query: str, k: int = 3):
     """Retrieve top-k relevant knowledge docs"""
@@ -63,26 +68,30 @@ def get_kb_context(query: str, k: int = 3):
         for match in results:
             if "text" in match["metadata"]:
                 context.append(match["metadata"]["text"])
+        logger.info("KB context fetched", extra={"query": query, "chunks": len(context)})
         return "\n".join(context)
     except Exception as e:
-        print(f"[get_kb_context] Error: {e}")
+        logger.error("[get_kb_context] Error", extra={"query": query, "error": str(e)})
         return ""
-        
+
 def update_kb(doc_id: str, text: str):
     """Insert/update therapist knowledge docs into KB vector DB"""
     try:
+        logger.info("Upserting KB document", extra={"doc_id": doc_id})
         embedding = get_embedding(text)
         upsert_kb(
             doc_id=doc_id,
             vector=embedding,
             text=text
         )
+        logger.info("KB document upserted", extra={"doc_id": doc_id})
     except Exception as e:
-        print(f"[update_kb] Error: {e}")
+        logger.error("[update_kb] Error", extra={"doc_id": doc_id, "error": str(e)})
         raise e
 
 def chat_agent(email: str, message: str):
     email = email.lower()
+    logger.info("Chat agent invoked", extra={"email": email, "message": message})
 
     prompt = return_system_prompt()
     if prompt:
@@ -112,6 +121,8 @@ def chat_agent(email: str, message: str):
             tool_call = result.message.tool_calls[0]
             func_name = tool_call.function.name
             func_args = json.loads(tool_call.function.arguments)
+
+            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "args": func_args})
 
             if func_name == "get_memory":
                 memory_result = get_memory(email, func_args["memory"])
@@ -175,6 +186,7 @@ def chat_agent(email: str, message: str):
                 )
                 reply = follow_up.choices[0].message.content
 
+            logger.info("Reply generated via tool call", extra={"email": email, "tool": func_name})
             add_chat_history(email, "user", message)
             add_chat_history(email, "assistant", reply)
 
@@ -185,6 +197,7 @@ def chat_agent(email: str, message: str):
 
         # No tool call — direct reply
         reply = result.message.content
+        logger.info("Direct reply generated", extra={"email": email})
         add_chat_history(email, "user", message)
         add_chat_history(email, "assistant", reply)
 
@@ -194,7 +207,7 @@ def chat_agent(email: str, message: str):
         }
 
     except Exception as e:
-        print(f"[chat_agent] Error: {e}")
+        logger.error("[chat_agent] Error", extra={"email": email, "error": str(e)})
         return {
             "success": False,
             "message": "Something went wrong. Please try again later."

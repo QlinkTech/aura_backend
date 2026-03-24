@@ -1,8 +1,9 @@
 import smtplib
 from email.message import EmailMessage
 from app.utils.env_load import app_password
+from app.utils.logger_config import logger
 
-SENDER_EMAIL = "manifestmydreams24@gmail.com"    
+SENDER_EMAIL = "manifestmydreams24@gmail.com"
 GMAIL_PASSWORD = app_password
 
 def send_mail_gmail(msg: EmailMessage, to: str, gmail_user: str, gmail_password: str):
@@ -13,12 +14,12 @@ def send_mail_gmail(msg: EmailMessage, to: str, gmail_user: str, gmail_password:
             server.login(gmail_user, gmail_password)
             server.send_message(msg)
 
-        print(f"Email sent successfully to {to}")
+        logger.info("Email sent successfully", extra={"to": to})
 
     except Exception as e:
-        print(f"Error sending email to {to}: {e}")
+        logger.error("Error sending email", extra={"to": to, "error": str(e)})
         raise e
-    
+
 
 def send_vision_board_ready_email(to: str, dashboard_link: str):
     """Function to send a notification mail when AI generates the vision board image."""
@@ -27,9 +28,9 @@ def send_vision_board_ready_email(to: str, dashboard_link: str):
     plain_text_body = f"""
     Hey there 👋,
 
-    Your vision board has been created successfully! ✨  
+    Your vision board has been created successfully! ✨
 
-    Take a moment to soak it in — it's all about your dreams, energy, and the future you're manifesting.  
+    Take a moment to soak it in — it's all about your dreams, energy, and the future you're manifesting.
 
     You can view it anytime on your dashboard here:
     {dashboard_link}
@@ -45,4 +46,5 @@ def send_vision_board_ready_email(to: str, dashboard_link: str):
 
     msg.set_content(plain_text_body)
 
+    logger.info("Sending vision board ready email", extra={"to": to})
     send_mail_gmail(msg, to, SENDER_EMAIL, GMAIL_PASSWORD)
