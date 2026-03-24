@@ -15,7 +15,7 @@ def _trial_start_at() -> int:
     return int(future.timestamp())
 
 # Subscription is active/paid — do not allow new subscription
-_PAID_STATUSES = {"active", "pending", "halted", "completed"}
+_PAID_STATUSES = {"active", "pending", "halted", "completed", "authenticated"}
 # Subscription was created but user hasn't paid yet — allow plan switch
 _UNPAID_STATUSES = {"created", "authenticated"}
 
