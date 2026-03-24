@@ -6,7 +6,7 @@ from app.utils.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
-EARLY_BIRD_TRIAL_MONTHS = 3
+EARLY_BIRD_TRIAL_MONTHS = 1
 
 
 def _trial_start_at() -> int:
