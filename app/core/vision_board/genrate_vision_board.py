@@ -2,7 +2,7 @@ from openai import OpenAI
 from app.utils.env_load import openai_api_key, cloud_api_key, cloud_api_secret, cloud_name
 from app.utils.send_mail import send_vision_board_ready_email
 from app.core.vision_board.vision_board_prompt import build_prompt
-from app.utils.db.mongo_utils import update_vision_board
+from app.services.db.user_profile_utils import update_vision_board
 from app.utils.logger_config import logger
 import cloudinary
 import cloudinary.uploader

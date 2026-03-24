@@ -8,12 +8,9 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-class GenerateVisionModel(BaseModel):
-    email: str
-    name: str
+class GenerateVisionRequest(BaseModel):
     answers: dict
     vibe: dict
-    password: str
 
 class ReGenerateVisionModel(BaseModel):
     email: str

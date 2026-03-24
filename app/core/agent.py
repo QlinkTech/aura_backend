@@ -1,7 +1,8 @@
 
 from openai import OpenAI
-from app.utils.db.mongo_utils import add_chat_history, get_last_chat_history, return_system_prompt
-from app.utils.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb
+from app.services.db.user_profile_utils import add_chat_history, get_last_chat_history
+from app.services.db.mongo_utils import return_system_prompt
+from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb
 from app.utils.logger_config import logger
 import json
 

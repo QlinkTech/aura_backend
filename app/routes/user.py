@@ -2,10 +2,11 @@ import asyncio
 import os
 import tempfile
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
-from app.utils.schema import ChatModel, ReGenerateVisionModel
+from app.utils.schema import ChatModel, ReGenerateVisionModel, GenerateVisionRequest
 from app.services.voice_service.sarvam_utils import transcribe_audio
-from app.services.auth_service import get_current_user
-from app.utils.db.mongo_utils import user_profile, get_chat_history, update_vision_board, get_user_details
+from app.services.auth_service import get_active_user
+from app.services.db.mongo_utils import user_profile
+from app.services.db.user_profile_utils import get_chat_history, update_vision_board, get_user_details
 from app.core.agent import chat_agent
 from app.core.vision_board.genrate_vision_board import generate_vision_background
 from app.utils.logger_config import logger
@@ -13,7 +14,7 @@ from app.utils.logger_config import logger
 user_router = APIRouter()
 
 @user_router.get("/vision-board/{email}")
-def get_vision_board(email: str, current_user=Depends(get_current_user)):
+def get_vision_board(email: str, current_user=Depends(get_active_user)):
     email = email.lower()
     logger.info("Get vision board request", extra={"email": email})
     if current_user["email"] != email:
@@ -24,7 +25,7 @@ def get_vision_board(email: str, current_user=Depends(get_current_user)):
     return {"vision_board_url": user["vision_board_url"]}
 
 @user_router.post("/chat")
-def chat(data: ChatModel, current_user=Depends(get_current_user)):
+def chat(data: ChatModel, current_user=Depends(get_active_user)):
     logger.info("Chat request received", extra={"email": data.email})
     if current_user["email"] != data.email.lower():
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -38,15 +39,24 @@ def chat(data: ChatModel, current_user=Depends(get_current_user)):
     return {"reply": result["reply"]}
 
 @user_router.get("/chat_history/{email}")
-def chat_history(email: str, current_user=Depends(get_current_user)):
+def chat_history(email: str, current_user=Depends(get_active_user)):
     email = email.lower()
     logger.info("Chat history request", extra={"email": email})
     if current_user["email"] != email:
         raise HTTPException(status_code=403, detail="Forbidden")
     return get_chat_history(email=email)
 
+@user_router.post("/generate-vision")
+def generate_vision(data: GenerateVisionRequest, background_tasks: BackgroundTasks, current_user=Depends(get_active_user)):
+    email = current_user["email"]
+    logger.info("Generate vision board request", extra={"email": email})
+    update_vision_board(email, "preparing")
+    background_tasks.add_task(generate_vision_background, email, data.answers, data.vibe)
+    logger.info("Vision board generation queued", extra={"email": email})
+    return {"success": True}
+
 @user_router.post("/regenerate-vision")
-def generate_vision(data: ReGenerateVisionModel, background_tasks: BackgroundTasks, current_user=Depends(get_current_user)):
+def generate_vision(data: ReGenerateVisionModel, background_tasks: BackgroundTasks, current_user=Depends(get_active_user)):
     logger.info("Regenerate vision board request", extra={"email": data.email, "vibe": data.vibe})
     email = data.email.lower()
 
@@ -61,7 +71,7 @@ def generate_vision(data: ReGenerateVisionModel, background_tasks: BackgroundTas
         raise e
 
 @user_router.get("/user-profile")
-def get_user(email: str, current_user=Depends(get_current_user)):
+def get_user(email: str, current_user=Depends(get_active_user)):
     email = email.lower()
     logger.info("Get user profile request", extra={"email": email})
     return get_user_details(email=email)
@@ -71,7 +81,7 @@ MAX_AUDIO_SIZE_MB = 10
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 @user_router.post("/voice-to-text")
-async def voice_to_text(audio: UploadFile = File(...), current_user=Depends(get_current_user)):
+async def voice_to_text(audio: UploadFile = File(...), current_user=Depends(get_active_user)):
     logger.info("Voice to text request", extra={"email": current_user["email"], "filename": audio.filename, "content_type": audio.content_type})
 
     if audio.content_type not in ALLOWED_AUDIO_TYPES:

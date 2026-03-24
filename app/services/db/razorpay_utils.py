@@ -66,15 +66,23 @@ def save_subscription_event(event: str, subscription: dict):
     logger.info("Saving subscription event", extra={"event": event, "subscription_id": subscription_id, "email": email})
 
     status_map = {
-        "subscription.authenticated": "authenticated",
+        "subscription.authenticated": "active",
         "subscription.activated": "active",
         "subscription.charged": "active",
-        "subscription.cancelled": "cancelled",
         "subscription.completed": "completed",
+        "subscription.cancelled": "cancelled",
         "subscription.halted": "halted",
+        "subscription.pending": "pending",
+        "subscription.paused": "paused",
+        "subscription.resumed": "active",
     }
     resolved_status = status_map.get(event, event)
-    is_paid = event in ("subscription.authenticated", "subscription.activated", "subscription.charged")
+    is_paid = event in (
+        "subscription.authenticated",
+        "subscription.activated",
+        "subscription.charged",
+        "subscription.resumed",
+    )
 
     payments.update_one(
         {"subscription_id": subscription_id},

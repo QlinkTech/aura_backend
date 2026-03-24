@@ -5,6 +5,7 @@ from jwt import decode, ExpiredSignatureError, InvalidTokenError
 import jwt
 from datetime import datetime, timedelta
 import os
+from app.services.db.mongo_utils import user_profile
 
 from app.utils.env_load import secret_key
 
@@ -26,6 +27,8 @@ def create_access_token(data, expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+_ACTIVE_SUBSCRIPTION_STATUSES = {"active", "completed", "authenticated"}
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
@@ -51,3 +54,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
         )
+
+def get_active_user(current_user: dict = Depends(get_current_user)):
+    email = current_user["email"]
+    user = user_profile.find_one({"email": email}, {"is_paid": 1, "subscription_status": 1})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES:
+        return current_user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")

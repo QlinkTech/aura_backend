@@ -1,583 +1,450 @@
 # Aura Server — API Documentation
 
-Base URL: `/api`
+## Authentication
+
+All **user routes** (`/user/*`) require:
+1. A valid JWT bearer token — `Authorization: Bearer <token>`
+2. An active Razorpay subscription (`subscription_status: active/completed` or `is_paid: true`)
+
+Requests that fail auth return:
+- `401` — missing/expired/invalid token
+- `403` — authenticated but no active subscription
+- `404` — user not found
 
 ---
 
-## Auth Routes — `/api/auth`
+## Auth Routes — `/auth`
+
+No authentication required.
 
 ---
 
-### POST `/api/auth/register`
+### `POST /auth/register`
+
 Create a new user account.
 
-**Request Body**
+**Body**
 ```json
-{
-  "email": "user@example.com",
-  "password": "secret123"
-}
+{ "email": "string", "password": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "message": "Account created successfully",
-  "access_token": "<jwt_token>",
-  "token_type": "bearer"
-}
+{ "message": "Account created successfully", "access_token": "string", "token_type": "bearer" }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 400 | Email already registered |
-| 500 | Internal server error |
+**Errors**
+- `400` — email already registered
 
 ---
 
-### POST `/api/auth/login`
+### `POST /auth/login`
+
 Login with email and password.
 
-**Request Body**
+**Body**
 ```json
-{
-  "email": "user@example.com",
-  "password": "secret123"
-}
+{ "email": "string", "password": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "access_token": "<jwt_token>",
-  "token_type": "bearer"
-}
+{ "access_token": "string", "token_type": "bearer" }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 401 | Invalid credentials |
-| 500 | Internal server error |
+**Errors**
+- `401` — invalid credentials
 
 ---
 
-### POST `/api/auth/generate-vision`
-Onboard a new user — sets password, creates profile, and queues vision board generation in the background.
+### `POST /auth/check-user`
 
-**Request Body**
+Check if an email is already registered.
+
+**Body**
 ```json
-{
-  "email": "user@example.com",
-  "name": "Jane Doe",
-  "password": "secret123",
-  "answers": {
-    "question_1": "answer_1"
-  },
-  "vibe": {
-    "color": "gold",
-    "mood": "abundance"
-  }
-}
+{ "email": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "access_token": "<jwt_token>",
-  "token_type": "bearer"
-}
-```
-
-> Vision board generation runs asynchronously. Poll `/api/user/vision-board/{email}` to check status. URL will be `"preparing"` until ready.
-
----
-
-### POST `/api/auth/check-user`
-Check if a user exists by email.
-
-**Request Body**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response — 200 OK**
-```json
-{
-  "exists": true
-}
+{ "exists": true }
 ```
 
 ---
 
-### POST `/api/auth/reset-password`
-Reset a user's password.
+### `POST /auth/reset-password`
 
-**Request Body**
+Reset password for an existing user.
+
+**Body**
 ```json
-{
-  "email": "user@example.com",
-  "new_password": "newSecret123"
-}
+{ "email": "string", "new_password": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "message": "Password reset successfully"
-}
+{ "message": "Password reset successfully" }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 404 | User not found |
-| 500 | Internal server error |
+**Errors**
+- `404` — user not found
 
 ---
 
-## User Routes — `/api/user`
+## User Routes — `/user`
 
-> All user routes require `Authorization: Bearer <token>` header.
+All routes require `Authorization: Bearer <token>` and an active subscription.
 
 ---
 
-### GET `/api/user/vision-board/{email}`
+### `GET /user/vision-board/{email}`
+
 Get the vision board URL for a user.
 
 **Path Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| email | string | User's email |
+- `email` — must match the authenticated user
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "vision_board_url": "https://res.cloudinary.com/..."
-}
+{ "vision_board_url": "string" }
 ```
 
-> Returns `"preparing"` as the URL while generation is in progress, and `"failed"` if generation failed.
-
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 403 | Forbidden (token email mismatch) |
-| 404 | Vision board not found |
+**Errors**
+- `403` — token email doesn't match path email
+- `404` — vision board not found
 
 ---
 
-### POST `/api/user/chat`
-Send a message to the AI coach.
+### `POST /user/generate-vision`
 
-**Request Body**
+Generate a vision board for the authenticated user. Email is taken from the token — no body field needed.
+
+**Body**
 ```json
 {
-  "email": "user@example.com",
-  "message": "I feel stuck with my manifestation goals."
+  "answers": { "...": "..." },
+  "vibe": { "...": "..." }
 }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "reply": "Hi love, I hear you..."
-}
+{ "success": true }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 400 | Agent processing error |
-| 403 | Forbidden / No user found |
+> Vision board generation runs in the background. Poll `GET /user/vision-board/{email}` to check when it's ready (value changes from `"preparing"` to a URL).
 
 ---
 
-### GET `/api/user/chat_history/{email}`
-Fetch full chat history for a user.
+### `POST /user/regenerate-vision`
+
+Regenerate the vision board for a user.
+
+**Body**
+```json
+{
+  "email": "string",
+  "answers": { "...": "..." },
+  "vibe": { "...": "..." }
+}
+```
+
+**Response `200`**
+```json
+{ "success": true }
+```
+
+**Errors**
+- `403` — token email doesn't match body email
+
+---
+
+### `POST /user/chat`
+
+Send a message to the AI agent.
+
+**Body**
+```json
+{ "email": "string", "message": "string" }
+```
+
+**Response `200`**
+```json
+{ "reply": "string" }
+```
+
+**Errors**
+- `400` — agent returned an error
+- `403` — token email doesn't match body email
+
+---
+
+### `GET /user/chat_history/{email}`
+
+Retrieve the full chat history for a user.
 
 **Path Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| email | string | User's email |
+- `email` — must match the authenticated user
 
-**Response — 200 OK**
+**Response `200`**
 ```json
 [
-  { "role": "user", "content": "Hello" },
-  { "role": "assistant", "content": "Hi love..." }
+  { "role": "user", "content": "string" },
+  { "role": "assistant", "content": "string" }
 ]
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 403 | Forbidden |
-| 404 | User not found |
+**Errors**
+- `403` — token email doesn't match path email
+- `404` — user not found
 
 ---
 
-### POST `/api/user/regenerate-vision`
-Re-generate the vision board for an existing user.
+### `GET /user/user-profile`
 
-**Request Body**
-```json
-{
-  "email": "user@example.com",
-  "answers": {
-    "question_1": "answer_1"
-  },
-  "vibe": {
-    "color": "purple",
-    "mood": "clarity"
-  }
-}
-```
-
-**Response — 200 OK**
-```json
-{
-  "sucess": true,
-  "token_type": "bearer"
-}
-```
-
-> Generation runs in the background. Poll `/api/user/vision-board/{email}` for the result.
-
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 403 | Forbidden |
-
----
-
-### GET `/api/user/user-profile?email={email}`
-Get user profile details (excludes chat history and internal ID).
+Get user profile details (excludes chat history).
 
 **Query Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| email | string | User's email |
+- `email` — email of the user to fetch
 
-**Response — 200 OK**
+**Response `200`**
 ```json
 {
-  "email": "user@example.com",
-  "name": "Jane Doe",
-  "is_paid": false,
-  "vision_board_url": "https://...",
+  "email": "string",
+  "is_paid": true,
   "subscription_status": "active",
-  "early_bird_sub_id": "sub_xxx",
-  "early_bird_plan_key": "3_months_plan",
-  "created_at": 1700000000,
-  "updated_at": 1700000001
+  "vision_board_url": "string",
+  "created_at": 0,
+  "updated_at": 0
 }
 ```
 
 ---
 
-## Payment Routes — `/api/payment`
+### `POST /user/voice-to-text`
+
+Transcribe an audio file to text.
+
+**Body** — `multipart/form-data`
+- `audio` — audio file
+
+**Supported types:** `audio/wav`, `audio/mpeg`, `audio/mp4`, `audio/webm`, `audio/ogg`, `audio/x-m4a`
+**Max size:** 10 MB
+
+**Response `200`**
+```json
+{ "transcript": "string" }
+```
+
+**Errors**
+- `400` — unsupported file type
+- `413` — file exceeds 10 MB
+- `500` — transcription failed
 
 ---
 
-### POST `/api/payment/early-bird-subscription`
-Create or retrieve an early bird subscription payment link.
+## Payment Routes — `/payment`
 
-> Requires `X-API-Key: <admin_api_key>` header.
+---
 
-**Request Body**
+### `POST /payment/early-bird-subscription`
+
+Create a Razorpay subscription link for an early bird user.
+
+**Auth** — requires `X-API-Key` header (admin key)
+
+**Body**
 ```json
 {
-  "email": "user@example.com",
-  "plan_key": "3_months_plan",
-  "expire_by": 1800000000
+  "email": "string",
+  "plan_key": "3_months_plan | 1_year_plan",
+  "expire_by": 1234567890
 }
 ```
+> `expire_by` is optional — Unix timestamp for link expiry.
 
-**Available plan keys**
-| Key | Billing | Total Cycles |
-|-----|---------|-------------|
-| `3_months_plan` | Monthly | 40 |
-| `1_year_plan` | Yearly | 10 |
-
-> A 1-month free trial is applied — billing starts 1 month from subscription creation (`start_at`).
-
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "subscription_id": "sub_xxxxxxxxxxxxx",
-  "payment_link": "https://rzp.io/l/xxx"
-}
+{ "subscription_id": "string", "payment_link": "string" }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 400 | Subscription already paid |
-| 400 | Invalid plan key |
-| 403 | Invalid API key |
-| 500 | Internal server error |
+**Errors**
+- `400` — invalid plan key or subscription already paid
+- `403` — invalid API key
 
 ---
 
-### POST `/api/payment/webhook`
+### `POST /payment/webhook`
+
 Razorpay webhook receiver. Handles payment and subscription lifecycle events.
 
-> Verified via `X-Razorpay-Signature` header (HMAC SHA256).
+**Auth** — validated via `X-Razorpay-Signature` header (HMAC-SHA256)
 
-**Handled Events**
-| Event | Action |
-|-------|--------|
-| `payment.captured` | Save payment, mark user `is_paid: true` |
-| `payment.failed` | Save failed payment record |
-| `subscription.activated` | Update subscription status to `active`, set `is_paid: true` |
-| `subscription.charged` | Update subscription status to `active`, set `is_paid: true` |
-| `subscription.authenticated` | Update subscription status to `authenticated`, set `is_paid: true` |
-| `subscription.cancelled` | Update subscription status to `cancelled` |
-| `subscription.completed` | Update subscription status to `completed` |
-| `subscription.halted` | Update subscription status to `halted` |
+**Handled events**
 
-**Response — 200 OK**
+| Event | Effect |
+|---|---|
+| `payment.captured` / `payment.authorized` | Saves payment, sets `is_paid: true` |
+| `payment.failed` | Saves failed payment record |
+| `subscription.authenticated` | Sets status `active`, `is_paid: true` |
+| `subscription.activated` | Sets status `active`, `is_paid: true` |
+| `subscription.charged` | Sets status `active`, `is_paid: true` |
+| `subscription.resumed` | Sets status `active`, `is_paid: true` |
+| `subscription.completed` | Sets status `completed`, `is_paid: false` |
+| `subscription.cancelled` | Sets status `cancelled`, `is_paid: false` |
+| `subscription.halted` | Sets status `halted`, `is_paid: false` |
+| `subscription.pending` | Sets status `pending`, `is_paid: false` |
+| `subscription.paused` | Sets status `paused`, `is_paid: false` |
+
+**Response `200`**
 ```json
-{
-  "status": "ok"
-}
+{ "status": "ok" }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 400 | Invalid webhook signature |
+**Errors**
+- `400` — invalid webhook signature
 
 ---
 
-## System Routes — `/api/system`
+## System Routes — `/system`
 
-> Internal/dashboard routes.
+Admin/dashboard routes. No user-level auth — protected by basic username/password login.
 
 ---
 
-### POST `/api/system/login`
+### `POST /system/login`
+
 Dashboard login.
 
-**Request Body**
+**Body**
 ```json
-{
-  "username": "admin",
-  "password": "secret"
-}
+{ "username": "string", "password": "string" }
 ```
 
-**Response — 201**
+**Response `201`**
 ```json
 { "success": true }
 ```
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 401 | Missing credentials |
-| 402 | Invalid username or password |
+**Errors**
+- `401` — missing credentials
+- `402` — invalid username or password
 
 ---
 
-### GET `/api/system/prompt`
-Get the current AI system prompt.
+### `GET /system/prompt`
 
-**Response — 200 OK**
+Get the current system prompt.
+
+**Response `200`**
 ```json
-{
-  "category": "system_prompt",
-  "prompt": "You are Sanaya AI...",
-  "old_prompt": "..."
-}
+{ "category": "system_prompt", "prompt": "string", "old_prompt": "string" }
 ```
 
 ---
 
-### PUT `/api/system/prompt`
-Update the AI system prompt.
+### `PUT /system/prompt`
 
-**Request Body**
+Update the system prompt.
+
+**Body**
 ```json
-{
-  "prompt": "You are Sanaya AI, updated version..."
-}
+{ "prompt": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
 { "success": true }
 ```
 
 ---
 
-### POST `/api/system/kb/upload`
-Upload a PDF file to the knowledge base.
+### `POST /system/kb/upload`
 
-**Form Data**
-| Field | Type | Description |
-|-------|------|-------------|
-| file | PDF file | Must be `application/pdf` |
+Upload a PDF to the knowledge base. Text is chunked and embedded into Pinecone.
 
-**Response — 200 OK**
+**Body** — `multipart/form-data`
+- `file` — PDF file (`application/pdf` only)
+
+**Response `200`**
 ```json
-{
-  "success": true,
-  "chunks_uploaded": 12
-}
+{ "success": true, "chunks_uploaded": 12 }
 ```
-
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 400 | Only PDF files allowed |
-| 400 | PDF text is empty |
 
 ---
 
-### POST `/api/system/kb/add-text`
+### `POST /system/kb/add-text`
+
 Add raw text to the knowledge base.
 
-**Request Body**
+**Body**
 ```json
-{
-  "text": "Chakra healing involves..."
-}
+{ "text": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
-{
-  "success": true,
-  "chunks_uploaded": 3
-}
+{ "success": true, "chunks_uploaded": 4 }
 ```
 
 ---
 
-### GET `/api/system/kb/all`
+### `GET /system/kb/all`
+
 List all knowledge base records.
 
-**Response — 200 OK**
-```json
-[
-  {
-    "id": "doc_abc123",
-    "metadata": {
-      "text": "...",
-      "created_at": "2024-01-01T00:00:00"
-    }
-  }
-]
-```
+**Response `200`** — array of KB records
 
 ---
 
-### GET `/api/system/kb/id/{doc_id}`
-Get a single KB record by ID.
+### `GET /system/kb/id/{doc_id}`
 
-**Path Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| doc_id | string | Pinecone vector ID |
+Fetch a single KB record by ID.
 
-**Response — 200 OK**
-```json
-{
-  "id": "doc_abc123",
-  "metadata": {
-    "text": "...",
-    "created_at": "2024-01-01T00:00:00"
-  }
-}
-```
-
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 404 | record not found |
+**Errors**
+- `404` — record not found
 
 ---
 
-### PUT `/api/system/kb/update/{doc_id}`
-Replace a KB record with new text (deletes old, re-chunks and re-embeds new).
+### `PUT /system/kb/update/{doc_id}`
 
-**Path Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| doc_id | string | Pinecone vector ID to replace |
+Replace a KB record with new text. Old chunks are deleted; new chunks are embedded.
 
-**Request Body**
+**Body**
 ```json
-{
-  "text": "Updated knowledge text..."
-}
+{ "text": "string" }
 ```
 
-**Response — 200 OK**
+**Response `200`**
 ```json
 { "success": true }
 ```
 
 ---
 
-### DELETE `/api/system/kb/delete/{doc_id}`
+### `DELETE /system/kb/delete/{doc_id}`
+
 Delete a KB record by ID.
 
-**Path Params**
-| Param | Type | Description |
-|-------|------|-------------|
-| doc_id | string | Pinecone vector ID |
-
-**Response — 200 OK**
+**Response `200`**
 ```json
 { "success": true }
 ```
 
 ---
 
-### POST `/api/system/kb/search`
-Semantic search across the knowledge base.
+### `POST /system/kb/search`
 
-**Request Body**
+Semantic search over the knowledge base.
+
+**Body**
 ```json
-{
-  "query": "root chakra healing"
-}
+{ "query": "string" }
 ```
 
-**Response — 200 OK**
-```json
-[
-  {
-    "id": "doc_abc123",
-    "text": "Root chakra is associated with...",
-    "created_at": "2024-01-01T00:00:00"
-  }
-]
-```
+**Response `200`** — top 15 matching records
 
-**Error Responses**
-| Status | Detail |
-|--------|--------|
-| 404 | record not found |
-| 500 | Failed to get records |
-
----
-
-## Health Check
-
-### GET `/ping`
-Check if the server is running.
-
-**Response — 200 OK**
-```json
-{
-  "status": "ok",
-  "message": "MMD - Qlink backend is running perfectly fine."
-}
-```
+**Errors**
+- `404` — no results found
+- `500` — search failed

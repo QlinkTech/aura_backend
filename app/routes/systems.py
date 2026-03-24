@@ -2,9 +2,9 @@ from fastapi import APIRouter, UploadFile, File, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.utils.schema import PromptModel
-from app.utils.db.mongo_utils import return_system_prompt, update_system_prompt
+from app.services.db.mongo_utils import return_system_prompt, update_system_prompt
 from app.core.agent import get_embedding
-from app.utils.db.pinecone_utils import upsert_kb, fetch_kb,chunk_text, fetch_records_with_metadata, delete_record_by_id, list_records_by_label
+from app.services.db.pinecone_utils import upsert_kb, fetch_kb,chunk_text, fetch_records_with_metadata, delete_record_by_id, list_records_by_label
 from app.utils.logger_config import logger
 from datetime import datetime
 import uuid

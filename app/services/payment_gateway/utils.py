@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
-from app.utils.db.mongo_utils import user_profile
+from app.services.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
@@ -57,6 +57,7 @@ def create_early_bird_sub_link(email: str, plan_key: str, expire_by: int = None)
                 "is_paid": False,
                 "created_at": int(time.time()),
                 "updated_at": int(time.time()),
+                "is_logged_in": False
             })
             return _create_and_store_subscription(email, plan_key, expire_by)
 

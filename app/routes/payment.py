@@ -3,7 +3,7 @@ import hashlib
 from fastapi import APIRouter, Request, HTTPException, status, Security
 from fastapi.security import APIKeyHeader
 from app.utils.env_load import razorpay_webhook_secret, admin_api_key
-from app.utils.db.razorpay_utils import (
+from app.services.db.razorpay_utils import (
     save_payment_captured,
     save_payment_failed,
     save_subscription_event,
@@ -27,9 +27,12 @@ SUBSCRIPTION_EVENTS = {
     "subscription.authenticated",
     "subscription.activated",
     "subscription.charged",
-    "subscription.cancelled",
     "subscription.completed",
+    "subscription.cancelled",
     "subscription.halted",
+    "subscription.pending",
+    "subscription.paused",
+    "subscription.resumed",
 }
 
 
