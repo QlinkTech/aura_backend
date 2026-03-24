@@ -10,6 +10,7 @@ from app.utils.db.razorpay_utils import (
 )
 from app.utils.schema import EarlyBirdSubRequest
 from app.services.payment_gateway.utils import create_early_bird_sub_link
+from app.utils.logger_config import logger
 
 _api_key_header = APIKeyHeader(name="X-API-Key")
 
@@ -61,6 +62,7 @@ async def razorpay_webhook(request: Request):
         )
 
     payload = await request.json()
+    logger.info("Recevied Webhook Data", extra={"data": payload})
     event = payload.get("event")
     entity = payload.get("payload", {})
 

@@ -103,7 +103,7 @@ def chat_agent(email: str, message: str):
             ],
             tools=tools,
             tool_choice="auto",
-            temperature=1.33
+            temperature=1.0
         )
 
         result = response.choices[0]
@@ -117,7 +117,7 @@ def chat_agent(email: str, message: str):
                 memory_result = get_memory(email, func_args["memory"])
 
                 follow_up = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4.1-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         *history,
@@ -148,7 +148,7 @@ def chat_agent(email: str, message: str):
             elif func_name == "update_memory":
                 update_memory(email, func_args["memory"])
                 follow_up = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4.1-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         *history,
