@@ -22,3 +22,5 @@ razorpay_app_id = os.getenv("TEST_RAZORPAY_APP_ID")
 razorpay_app_secrete = os.getenv("TEST_RAZORPAY_APP_SECRETE")
 
 admin_api_key = os.getenv("ADMIN_API_KEY")
+
+sarvam_api = os.getenv("SARVAM_API")
