@@ -92,7 +92,7 @@ def update_kb(doc_id: str, text: str):
 
 def chat_agent(email: str, message: str):
     email = email.lower()
-    logger.info("Chat agent invoked", extra={"email": email, "message": message})
+    logger.info("Chat agent invoked", extra={"email": email, "user_message": message})
 
     prompt = return_system_prompt()
     if prompt:
