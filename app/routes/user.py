@@ -82,7 +82,7 @@ CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 @user_router.post("/voice-to-text")
 async def voice_to_text(audio: UploadFile = File(...), current_user=Depends(get_active_user)):
-    logger.info("Voice to text request", extra={"email": current_user["email"], "filename": audio.filename, "content_type": audio.content_type})
+    logger.info("Voice to text request")
 
     if audio.content_type not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {audio.content_type}")
