@@ -5,7 +5,7 @@ from app.services.auth_service import hash_password, verify_password, create_acc
 from app.utils.logger_config import logger
 
 
-def create_account(email: str, password: str):
+def create_account(email: str, password: str, user_name: str):
     try:
         email = email.lower()
         logger.info("Creating account", extra={"email": email})
@@ -21,6 +21,7 @@ def create_account(email: str, password: str):
             user_profile.update_one(
                 {"email": email},
                 {"$set": {
+                    "username": user_name, 
                     "password": hashed_pw,
                     "chat_history": [],
                     "vision_board_url": "",
@@ -31,6 +32,7 @@ def create_account(email: str, password: str):
         else:
             user_profile.insert_one({
                 "email": email,
+                "username": user_name,  
                 "password": hashed_pw,
                 "chat_history": [],
                 "vision_board_url": "",

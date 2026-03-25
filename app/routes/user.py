@@ -71,8 +71,8 @@ def generate_vision(data: ReGenerateVisionModel, background_tasks: BackgroundTas
         raise e
 
 @user_router.get("/user-profile")
-def get_user(email: str, current_user=Depends(get_active_user)):
-    email = email.lower()
+def get_user(current_user=Depends(get_active_user)):
+    email = current_user["email"]
     logger.info("Get user profile request", extra={"email": email})
     return get_user_details(email=email)
 

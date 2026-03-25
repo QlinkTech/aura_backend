@@ -52,6 +52,7 @@ def create_early_bird_sub_link(email: str, plan_key: str, expire_by: int = None)
             logger.info("New user — creating profile and subscription", extra={"email": email})
             user_profile.insert_one({
                 "email": email,
+                "username": "", 
                 "chat_history": [],
                 "vision_board_url": "",
                 "is_paid": False,
