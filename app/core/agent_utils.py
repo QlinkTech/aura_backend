@@ -124,5 +124,23 @@ tools = [
                 "additionalProperties": False
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_journal_context",
+            "description": "Search the user's past journal entries to retrieve relevant emotional context, themes, moods, or patterns. Use this when the user references feelings, recurring struggles, relationships, or growth — anything that may have been journaled before.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "A short phrase describing what to search for in the user's journal history, e.g. 'work stress and guilt', 'relationship with mother', 'fear of visibility'"
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            }
+        }
     }
 ]

@@ -8,8 +8,8 @@ from app.services.db.razorpay_utils import (
     save_payment_failed,
     save_subscription_event,
 )
-from app.utils.schema import EarlyBirdSubRequest
-from app.services.payment_gateway.utils import create_early_bird_sub_link
+from app.utils.schema import EarlyBirdSubRequest, SubscribeRequest
+from app.services.payment_gateway.utils import create_early_bird_sub_link, create_sub_link
 from app.utils.logger_config import logger
 
 _api_key_header = APIKeyHeader(name="X-API-Key")
@@ -48,6 +48,14 @@ def _verify_signature(body: bytes, signature: str) -> bool:
 @payment_router.post("/early-bird-subscription", dependencies=[Security(_verify_api_key)])
 async def early_bird_subscription(request: EarlyBirdSubRequest):
     return create_early_bird_sub_link(
+        email=request.email,
+        plan_key=request.plan_key,
+        expire_by=request.expire_by,
+    )
+
+@payment_router.post("/subscribe", dependencies=[Security(_verify_api_key)])
+async def create_subscription(request: SubscribeRequest):
+    return create_sub_link(
         email=request.email,
         plan_key=request.plan_key,
         expire_by=request.expire_by,

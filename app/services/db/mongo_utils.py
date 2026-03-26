@@ -7,6 +7,7 @@ db = mongo_client["aura"]
 user_profile = db["user_profile"]
 system = db["systems"]
 payments = db["payments"]
+journal_log = db["journal_log"]
 
 
 def return_system_prompt():

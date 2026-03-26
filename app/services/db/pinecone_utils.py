@@ -33,6 +33,7 @@ def get_embedding(text:str):
 pinecone_namespace = "sanaya"
 pinecone_kb_namespace = "sanaya_kb"
 pinecone_kb_test_namespace = "sanaya_kb_test"
+pinecone_journal_namespace = "aura_journal_entry"
 
 def _generate_id(length=7):
     chars = string.ascii_letters + string.digits
@@ -185,6 +186,49 @@ async def fetch_records_with_metadata(query: str, top_k: int = 3):
     except Exception as e:
         logger.error("Error fetching KB records with metadata", extra={"query": query, "error": str(e)})
         return []
+
+def upsert_journal(email: str, vector: list, summary: str, log_id: str) -> None:
+    """Upsert journal summary embedding into the aura_journal_entry namespace."""
+    try:
+        logger.info("Upserting journal vector", extra={"email": email, "log_id": log_id})
+        index.upsert(
+            namespace=pinecone_journal_namespace,
+            vectors=[
+                {
+                    "id": log_id,
+                    "values": vector,
+                    "metadata": {
+                        "email": email,
+                        "text": summary,
+                        "created_at": datetime.now().isoformat()
+                    }
+                }
+            ]
+        )
+        logger.info("Journal vector upserted", extra={"email": email, "log_id": log_id})
+    except Exception as e:
+        logger.error("Error upserting journal vector", extra={"email": email, "error": str(e)})
+        raise e
+
+
+def fetch_journal(email: str, vector: list, top_k: int = 5) -> list:
+    """Fetch similar journal entries for a user from the aura_journal_entry namespace."""
+    try:
+        logger.info("Fetching journal vectors", extra={"email": email, "top_k": top_k})
+        result = index.query(
+            namespace=pinecone_journal_namespace,
+            vector=vector,
+            filter={"email": email},
+            top_k=top_k,
+            include_metadata=True
+        )
+        matches = result.get("matches", [])
+        logger.info("Journal vectors fetched", extra={"email": email, "matches": len(matches)})
+        return matches
+    except Exception as e:
+        logger.error("Error fetching journal vectors", extra={"email": email, "error": str(e)})
+        raise e
+
 
 def delete_record_by_id(record_id: str, namespace: str = pinecone_kb_namespace):
     """Delete a record from Pinecone namespace by its ID."""

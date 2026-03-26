@@ -2,7 +2,7 @@
 from openai import OpenAI
 from app.services.db.user_profile_utils import add_chat_history, get_last_chat_history
 from app.services.db.mongo_utils import return_system_prompt
-from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb
+from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb, fetch_journal
 from app.utils.logger_config import logger
 import json
 
@@ -57,6 +57,22 @@ def get_memory(user: str, memory: str):
         raise e
 
 
+def get_journal_context(user: str, query: str):
+    try:
+        logger.info("Fetching journal context", extra={"user": user, "query": query})
+        embedding = get_embedding(query)
+        results = fetch_journal(email=user, vector=embedding, top_k=3)
+        value = []
+        for match in results:
+            if "text" in match.get("metadata", {}):
+                value.append(match["metadata"]["text"])
+        logger.info("Journal context fetched", extra={"user": user, "results_count": len(value)})
+        return {"journal_context": "\n".join(value)}
+    except Exception as e:
+        logger.error("[get_journal_context] Error", extra={"user": user, "error": str(e)})
+        raise e
+
+
 def get_kb_context(query: str, k: int = 3):
     """Retrieve top-k relevant knowledge docs"""
     try:
@@ -105,7 +121,7 @@ def chat_agent(email: str, message: str):
         rag_context = f"\n---\nTherapist Knowledge Base:\n{kb_context}\n---\n"
 
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": mmd_system_prompt + rag_context},
                 {"role": "system", "content": f"Chat history: {history}"},
@@ -123,69 +139,43 @@ def chat_agent(email: str, message: str):
             func_name = tool_call.function.name
             func_args = json.loads(tool_call.function.arguments)
 
-            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "args": func_args})
+            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "tool_args": func_args})
 
-            if func_name == "get_memory":
-                memory_result = get_memory(email, func_args["memory"])
+            tool_dispatch = {
+                "get_memory":         lambda: json.dumps(get_memory(email, func_args["memory"])),
+                "update_memory":      lambda: (update_memory(email, func_args["memory"]), f"Memory stored successfully: {func_args['memory']}")[1],
+                "get_journal_context": lambda: json.dumps(get_journal_context(email, func_args["query"])),
+            }
 
-                follow_up = openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        *history,
-                        {
-                            "role": "assistant",
-                            "tool_calls": [
-                                {
-                                    "id": tool_call.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": func_name,
-                                        "arguments": json.dumps(func_args)
-                                    }
+            tool_result_content = tool_dispatch[func_name]()
+
+            follow_up = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    *history,
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": tool_call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": func_name,
+                                    "arguments": json.dumps(func_args)
                                 }
-                            ]
-                        },
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": json.dumps(memory_result)  # or whatever result you want to pass
-                        }
-                    ],
-                    temperature=0.7
-                )
-
-                reply = follow_up.choices[0].message.content
-
-            elif func_name == "update_memory":
-                update_memory(email, func_args["memory"])
-                follow_up = openai_client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        *history,
-                        {
-                            "role": "assistant",
-                            "tool_calls": [
-                                {
-                                    "id": tool_call.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": func_name,
-                                        "arguments": json.dumps(func_args)
-                                    }
-                                }
-                            ]
-                        },
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": f"Memory stored successfully: {func_args['memory']}"
-                        }
-                    ],
-                    temperature=0.7
-                )
-                reply = follow_up.choices[0].message.content
+                            }
+                        ]
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": tool_result_content
+                    }
+                ],
+                temperature=0.7
+            )
+            reply = follow_up.choices[0].message.content
 
             logger.info("Reply generated via tool call", extra={"email": email, "tool": func_name})
             add_chat_history(email, "user", message)

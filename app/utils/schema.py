@@ -19,7 +19,6 @@ class ReGenerateVisionModel(BaseModel):
     vibe: dict
 
 class ChatModel(BaseModel):
-    email: str
     message: str
 
 class PromptModel(BaseModel):
@@ -36,3 +35,12 @@ class EarlyBirdSubRequest(BaseModel):
     email: str
     plan_key: str
     expire_by: int = None
+
+class SubscribeRequest(BaseModel):
+    email: str
+    plan_key: str
+    expire_by: int = None
+
+class JournalModel(BaseModel):
+    journal_prompt: str
+    journal_entry: str

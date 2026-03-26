@@ -162,11 +162,11 @@ Regenerate the vision board for a user.
 
 ### `POST /user/chat`
 
-Send a message to the AI agent.
+Send a message to the AI agent. Email is taken from the token.
 
 **Body**
 ```json
-{ "email": "string", "message": "string" }
+{ "message": "string" }
 ```
 
 **Response `200`**
@@ -180,12 +180,9 @@ Send a message to the AI agent.
 
 ---
 
-### `GET /user/chat_history/{email}`
+### `GET /user/chat-history`
 
-Retrieve the full chat history for a user.
-
-**Path Params**
-- `email` — must match the authenticated user
+Retrieve the full chat history for the authenticated user.
 
 **Response `200`**
 ```json
@@ -196,7 +193,6 @@ Retrieve the full chat history for a user.
 ```
 
 **Errors**
-- `403` — token email doesn't match path email
 - `404` — user not found
 
 ---
@@ -204,9 +200,6 @@ Retrieve the full chat history for a user.
 ### `GET /user/user-profile`
 
 Get user profile details (excludes chat history).
-
-**Query Params**
-- `email` — email of the user to fetch
 
 **Response `200`**
 ```json
@@ -219,6 +212,121 @@ Get user profile details (excludes chat history).
   "updated_at": 0
 }
 ```
+
+---
+
+### `GET /user/journal-prompts/{email}`
+
+Generate 4 personalised journal prompts based on the user's last 3 journal entries. If no entries exist, returns 4 generic prompts.
+
+**Path Params**
+- `email` — must match the authenticated user
+
+**Response `200`**
+```json
+{
+  "prompts": [
+    "string",
+    "string",
+    "string",
+    "string"
+  ]
+}
+```
+
+**Errors**
+- `400` — failed to generate prompts
+- `403` — token email doesn't match path email
+
+---
+
+### `POST /user/journal`
+
+Submit a journal entry. The agent summarises the entry, extracts mood, mood intensity, people mentioned, and themes, then stores the result in MongoDB (`journal_log`) and the summary embedding in Pinecone (`aura_journal_entry` namespace).
+
+**Body**
+```json
+{
+  "email": "string",
+  "journal_prompt": "string",
+  "journal_entry": "string"
+}
+```
+
+**Response `200`**
+```json
+{
+  "success": true,
+  "log_id": "string",
+  "summary": "string",
+  "mood": "string",
+  "mood_score": 7,
+  "people": ["string"],
+  "themes": ["string"]
+}
+```
+
+> `mood_score` is an integer from 1 (very low intensity) to 10 (extremely intense).
+
+**Errors**
+- `400` — agent failed to process the entry
+- `403` — token email doesn't match body email or user not found
+
+---
+
+### `GET /user/journal-logs`
+
+List all journal logs for the authenticated user, newest first.
+
+**Response `200`**
+```json
+{
+  "logs": [
+    {
+      "log_id": "string",
+      "journal_prompt": "string",
+      "journal_entry": "string",
+      "summary": "string",
+      "mood": "string",
+      "mood_score": 7,
+      "people": ["string"],
+      "theme": "string",
+      "created_at": 0
+    }
+  ]
+}
+```
+
+---
+
+### `GET /user/journal-logs/{log_id}`
+
+Get a single journal log by its ID.
+
+**Path Params**
+- `log_id` — MongoDB ObjectId of the journal log
+
+**Response `200`** — same shape as a single log object above
+
+**Errors**
+- `404` — log not found or doesn't belong to the user
+
+---
+
+### `DELETE /user/journal-logs/{log_id}`
+
+Delete a journal log. Removes the entry from both MongoDB and Pinecone (`aura_journal_entry` namespace).
+
+**Path Params**
+- `log_id` — MongoDB ObjectId of the journal log
+
+**Response `200`**
+```json
+{ "success": true }
+```
+
+**Errors**
+- `404` — log not found or doesn't belong to the user
 
 ---
 

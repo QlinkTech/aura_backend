@@ -1,0 +1,378 @@
+{
+  "info": {
+    "name": "Aura Server",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "admin_api_key",
+      "value": ""
+    },
+    {
+      "key": "log_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"user_name\": \"Jane Doe\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check User",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/check-user",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/reset-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"new_password\": \"newpassword123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/user-profile",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/chat",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"I've been feeling overwhelmed lately.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Chat History",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/chat-history",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Vision Board",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/vision-board/user@example.com",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Generate Vision Board",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/generate-vision",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": {\n    \"name\": \"Jane\",\n    \"limitless_identity\": \"confident CEO\",\n    \"goals\": \"launch my business\",\n    \"success_metrics\": \"10k MRR\",\n    \"pinch_moment\": \"signing first client\",\n    \"feelings\": \"free and abundant\",\n    \"frequency_anchor\": \"daily gratitude\",\n    \"secret_craving\": \"financial freedom\",\n    \"north_star\": \"peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"boss\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Regenerate Vision Board",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/regenerate-vision",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"answers\": {\n    \"name\": \"Jane\",\n    \"limitless_identity\": \"confident CEO\",\n    \"goals\": \"launch my business\",\n    \"success_metrics\": \"10k MRR\",\n    \"pinch_moment\": \"signing first client\",\n    \"feelings\": \"free and abundant\",\n    \"frequency_anchor\": \"daily gratitude\",\n    \"secret_craving\": \"financial freedom\",\n    \"north_star\": \"peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"healing\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Voice to Text",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/voice-to-text",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "audio",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Journal Prompts",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/journal-prompts",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Submit Journal Entry",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/journal",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"journal_prompt\": \"What is something you've been carrying lately?\",\n  \"journal_entry\": \"Lately I've been feeling a lot of pressure from work and I haven't been sleeping well. I miss spending time with my family but I feel guilty when I take breaks.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Journal Logs",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/journal-logs",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Journal Log",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/journal-logs/{{log_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete Journal Log",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/user/journal-logs/{{log_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment",
+      "item": [
+        {
+          "name": "Early Bird Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/payment/early-bird-subscription",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"plan_key\": \"3_months_plan\",\n  \"expire_by\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Subscribe",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/payment/subscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"plan_key\": \"1_year_plan\",\n  \"expire_by\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Webhook (Razorpay)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/payment/webhook",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Razorpay-Signature", "value": "<signature>" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {}\n    }\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Dashboard Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get System Prompt",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/system/prompt"
+          }
+        },
+        {
+          "name": "Update System Prompt",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/system/prompt",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"You are Aura, a warm and empathetic AI wellness companion...\"\n}"
+            }
+          }
+        },
+        {
+          "name": "KB - Upload PDF",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/kb/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "KB - Add Text",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/kb/add-text",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"CBT techniques for anxiety include...\"\n}"
+            }
+          }
+        },
+        {
+          "name": "KB - List All",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/system/kb/all"
+          }
+        },
+        {
+          "name": "KB - Get by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/system/kb/id/doc-id-here"
+          }
+        },
+        {
+          "name": "KB - Update by ID",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/system/kb/update/doc-id-here",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated knowledge base content...\"\n}"
+            }
+          }
+        },
+        {
+          "name": "KB - Delete by ID",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/system/kb/delete/doc-id-here"
+          }
+        },
+        {
+          "name": "KB - Search",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/kb/search",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"breathing techniques for anxiety\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -102,3 +102,55 @@ def create_early_bird_sub_link(email: str, plan_key: str, expire_by: int = None)
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+def create_sub_link(email: str, plan_key: str, expire_by: int = None) -> dict:
+    """Create a subscription link for an existing user only. Raises 404 if user not found."""
+    try:
+        email = email.lower()
+        logger.info("Subscription link request", extra={"email": email, "plan_key": plan_key})
+        user = user_profile.find_one({"email": email})
+
+        if user is None:
+            logger.warning("Subscription request for non-existent user", extra={"email": email})
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        existing_sub_id = user.get("early_bird_sub_id")
+
+        if not existing_sub_id:
+            return _create_and_store_subscription(email, plan_key, expire_by)
+
+        existing_sub = fetch_subscription(existing_sub_id)
+        existing_status = existing_sub.get("status")
+        existing_plan_key = user.get("early_bird_plan_key")
+
+        logger.info("Existing subscription found", extra={"email": email, "sub_id": existing_sub_id, "status": existing_status})
+
+        if existing_status in _PAID_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Subscription already active (status: {existing_status})."
+            )
+
+        if existing_status in _UNPAID_STATUSES and existing_plan_key == plan_key:
+            return {
+                "subscription_id": existing_sub_id,
+                "payment_link": user.get("early_bird_payment_link", ""),
+            }
+
+        if existing_status in _UNPAID_STATUSES:
+            cancel_subscription(existing_sub_id)
+
+        return _create_and_store_subscription(email, plan_key, expire_by)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating subscription link", extra={"email": email, "error": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
