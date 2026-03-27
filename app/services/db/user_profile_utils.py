@@ -199,7 +199,7 @@ def request_password_reset(email: str):
             "used": False,
         })
 
-        reset_link = f"{frontend_url}/reset-password/{token}"
+        reset_link = f"{frontend_url}/reset-password?token={token}"
         username = user.get("username", "")
 
         try:
