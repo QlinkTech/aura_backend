@@ -18,8 +18,8 @@ username = os.environ.get("LOGIN_USERNAME")
 password = os.environ.get("LOGIN_PASS")
 
 razorpay_webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-razorpay_app_id = os.getenv("TEST_RAZORPAY_APP_ID")
-razorpay_app_secrete = os.getenv("TEST_RAZORPAY_APP_SECRETE")
+razorpay_app_id = os.getenv("RAZORPAY_APP_ID")
+razorpay_app_secrete = os.getenv("RAZORPAY_APP_SECRETE")
 
 admin_api_key = os.getenv("ADMIN_API_KEY")
 

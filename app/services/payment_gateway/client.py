@@ -14,13 +14,14 @@ gateway_client = Client(auth=(APP_ID, APP_SECRETE))
 #     "1_year_plan" : "plan_SHezS2mVAAsmvy"
 # }
 
+# live plans
 sub_plans = {
     "3_months_plan" : {
         "id": "plan_SSgpJOIP16Ajnt",
         "total_count" : 40
     },
     "1_year_plan" : {
-        "id": "plan_SHezS2mVAAsmvy",
+        "id": "plan_SSgu6Djr2nFr2x",
         "total_count" : 10
     }
 }
