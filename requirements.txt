@@ -19,3 +19,4 @@ setuptools<70
 
 razorpay
 sarvamai
+brevo-python

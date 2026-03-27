@@ -1,8 +1,13 @@
 import time
+import secrets
 from fastapi import HTTPException, status
-from app.services.db.mongo_utils import user_profile
+from app.services.db.mongo_utils import user_profile, password_reset_tokens
 from app.services.auth_service import hash_password, verify_password, create_access_token
+from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact
+from app.utils.env_load import frontend_url
 from app.utils.logger_config import logger
+
+RESET_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 
 
 def create_account(email: str, password: str, user_name: str):
@@ -44,6 +49,19 @@ def create_account(email: str, password: str, user_name: str):
 
         token = create_access_token({"sub": email, "email": email})
         logger.info("Account created successfully", extra={"email": email})
+
+        try:
+            send_account_created_email(to_email=email, to_name=user_name)
+            logger.info("Account created email sent", extra={"email": email})
+        except Exception as e:
+            logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
+
+        try:
+            add_registered_contact(email=email, name=user_name)
+            logger.info("Contact added to registered list", extra={"email": email})
+        except Exception as e:
+            logger.error("Failed to add contact to registered list", extra={"email": email, "error": str(e)})
+
         return {"message": "Account created successfully", "access_token": token, "token_type": "bearer"}
     except HTTPException:
         raise
@@ -161,22 +179,67 @@ def check_user_exists(email: str):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-def reset_password(email: str, new_password: str):
+def request_password_reset(email: str):
     try:
         email = email.lower()
-        logger.info("Reset password attempt", extra={"email": email})
-        user = user_profile.find_one({"email": email}, {"_id": 1})
+        logger.info("Password reset requested", extra={"email": email})
+        user = user_profile.find_one({"email": email}, {"username": 1})
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            # Return success to avoid email enumeration
+            return {"message": "If that email is registered, a reset link has been sent."}
+
+        token = secrets.token_urlsafe(32)
+        expires_at = int(time.time()) + RESET_TOKEN_EXPIRY_SECONDS
+
+        password_reset_tokens.delete_many({"email": email})
+        password_reset_tokens.insert_one({
+            "email": email,
+            "token": token,
+            "expires_at": expires_at,
+            "used": False,
+        })
+
+        reset_link = f"{frontend_url}/reset-password/{token}"
+        username = user.get("username", "")
+
+        try:
+            send_reset_password_email(to_email=email, to_name=username, reset_link=reset_link)
+            logger.info("Password reset email sent", extra={"email": email})
+        except Exception as e:
+            logger.error("Failed to send reset password email", extra={"email": email, "error": str(e)})
+
+        return {"message": "If that email is registered, a reset link has been sent."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error processing password reset request", extra={"email": email, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def reset_password(token: str, new_password: str):
+    try:
+        logger.info("Password reset attempt with token")
+        record = password_reset_tokens.find_one({"token": token})
+
+        if not record:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link.")
+        if record.get("used"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This reset link has already been used.")
+        if int(time.time()) > record["expires_at"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This reset link has expired.")
+
+        email = record["email"]
         hashed_pw = hash_password(new_password)
         user_profile.update_one(
             {"email": email},
             {"$set": {"password": hashed_pw, "updated_at": int(time.time())}}
         )
+        password_reset_tokens.update_one({"token": token}, {"$set": {"used": True}})
+
         logger.info("Password reset successfully", extra={"email": email})
-        return {"message": "Password reset successfully"}
+        return {"message": "Password reset successfully."}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error resetting password", extra={"email": email, "error": str(e)})
+        logger.error("Error resetting password", extra={"error": str(e)})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

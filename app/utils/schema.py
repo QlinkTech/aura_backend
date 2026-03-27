@@ -27,8 +27,11 @@ class PromptModel(BaseModel):
 class CheckUserRequest(BaseModel):
     email: str
 
-class ResetPasswordRequest(BaseModel):
+class RequestResetPasswordRequest(BaseModel):
     email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
     new_password: str
 
 class EarlyBirdSubRequest(BaseModel):
@@ -40,6 +43,10 @@ class SubscribeRequest(BaseModel):
     email: str
     plan_key: str
     expire_by: int = None
+
+class ManageSubscriptionRequest(BaseModel):
+    email: str
+    cancel_at_cycle_end: bool = False  # only used for cancel
 
 class JournalModel(BaseModel):
     journal_prompt: str

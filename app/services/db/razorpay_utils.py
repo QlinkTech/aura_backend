@@ -1,8 +1,7 @@
 import time
-from pymongo import MongoClient
-from app.utils.env_load import mongodb_uri
 from app.utils.logger_config import logger
 from app.services.db.mongo_utils import user_profile, payments
+from app.services.brevo.client import send_welcome_email, send_thank_you_email, add_subscribed_contact
 
 
 
@@ -114,5 +113,28 @@ def save_subscription_event(event: str, subscription: dict):
 
         user_profile.update_one({"_id": profile["_id"]}, {"$set": update_fields})
         logger.info("User profile updated for subscription event", extra={"event": event, "email": email, "resolved_status": resolved_status, "is_paid": is_paid})
+
+        if event == "subscription.authenticated" and email:
+            try:
+                username = profile.get("username", "")
+                send_welcome_email(to_email=email, to_name=username)
+                logger.info("Welcome email sent", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to send welcome email", extra={"email": email, "error": str(e)})
+
+            try:
+                username = profile.get("username", "")
+                add_subscribed_contact(email=email, name=username)
+                logger.info("Contact added to subscribed list", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to add contact to subscribed list", extra={"email": email, "error": str(e)})
+
+        if event == "subscription.charged" and email:
+            try:
+                username = profile.get("username", "")
+                send_thank_you_email(to_email=email, to_name=username)
+                logger.info("Thank you email sent", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to send thank you email", extra={"email": email, "error": str(e)})
     else:
         logger.warning("No user profile found for subscription event", extra={"event": event, "subscription_id": subscription_id, "email": email})

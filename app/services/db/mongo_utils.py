@@ -8,6 +8,7 @@ user_profile = db["user_profile"]
 system = db["systems"]
 payments = db["payments"]
 journal_log = db["journal_log"]
+password_reset_tokens = db["password_reset_tokens"]
 
 
 def return_system_prompt():

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, ResetPasswordRequest
-from app.services.db.user_profile_utils import create_account, login, check_user_exists, reset_password
+from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, RequestResetPasswordRequest, ResetPasswordRequest
+from app.services.db.user_profile_utils import create_account, login, check_user_exists, request_password_reset, reset_password
 from app.utils.logger_config import logger
 
 auth_router = APIRouter()
@@ -20,7 +20,12 @@ def check_user(payload: CheckUserRequest):
     logger.info("Check user request", extra={"email": payload.email})
     return check_user_exists(payload.email)
 
+@auth_router.post("/request-reset-password")
+def request_reset(payload: RequestResetPasswordRequest):
+    logger.info("Password reset requested", extra={"email": payload.email})
+    return request_password_reset(payload.email)
+
 @auth_router.post("/reset-password")
 def reset_user_password(payload: ResetPasswordRequest):
-    logger.info("Reset password request", extra={"email": payload.email})
-    return reset_password(payload.email, payload.new_password)
+    logger.info("Reset password attempt")
+    return reset_password(payload.token, payload.new_password)

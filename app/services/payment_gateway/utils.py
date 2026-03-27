@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from app.services.db.mongo_utils import user_profile
-from app.services.payment_gateway.client import create_subscription, cancel_subscription, fetch_subscription
+from app.services.payment_gateway.client import create_subscription, cancel_subscription, pause_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
 EARLY_BIRD_TRIAL_MONTHS = 1
@@ -154,3 +154,83 @@ def create_sub_link(email: str, plan_key: str, expire_by: int = None) -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+def get_user_subscription(email: str) -> dict:
+    try:
+        email = email.lower()
+        logger.info("Fetching subscription details", extra={"email": email})
+        user = user_profile.find_one(
+            {"email": email},
+            {"early_bird_sub_id": 1, "early_bird_plan_key": 1, "subscription_status": 1, "is_paid": 1}
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        sub_id = user.get("early_bird_sub_id")
+        if not sub_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No subscription found for this user")
+        sub = fetch_subscription(sub_id)
+        return {
+            "subscription_id": sub_id,
+            "plan_key": user.get("early_bird_plan_key"),
+            "status": sub.get("status"),
+            "is_paid": user.get("is_paid", False),
+            "current_start": sub.get("current_start"),
+            "current_end": sub.get("current_end"),
+            "charge_at": sub.get("charge_at"),
+            "paid_count": sub.get("paid_count"),
+            "remaining_count": sub.get("remaining_count"),
+            "total_count": sub.get("total_count"),
+            "short_url": sub.get("short_url"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching subscription details", extra={"email": email, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def _get_active_subscription_id(email: str) -> str:
+    user = user_profile.find_one({"email": email}, {"early_bird_sub_id": 1, "subscription_status": 1})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    sub_id = user.get("early_bird_sub_id")
+    if not sub_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No subscription found for this user")
+    sub_status = user.get("subscription_status", "")
+    if sub_status not in ("active", "authenticated"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Subscription is not active (current status: {sub_status})"
+        )
+    return sub_id
+
+
+def cancel_user_subscription(email: str, cancel_at_cycle_end: bool = False) -> dict:
+    try:
+        email = email.lower()
+        logger.info("Cancel subscription request", extra={"email": email, "cancel_at_cycle_end": cancel_at_cycle_end})
+        sub_id = _get_active_subscription_id(email)
+        result = cancel_subscription(sub_id, cancel_at_cycle_end=1 if cancel_at_cycle_end else 0)
+        logger.info("Subscription cancelled", extra={"email": email, "sub_id": sub_id})
+        return {"message": "Subscription cancelled successfully", "subscription_id": sub_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error cancelling subscription", extra={"email": email, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def pause_user_subscription(email: str) -> dict:
+    try:
+        email = email.lower()
+        logger.info("Pause subscription request", extra={"email": email})
+        sub_id = _get_active_subscription_id(email)
+        result = pause_subscription(sub_id)
+        logger.info("Subscription paused", extra={"email": email, "sub_id": sub_id})
+        return {"message": "Subscription paused successfully", "subscription_id": sub_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error pausing subscription", extra={"email": email, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

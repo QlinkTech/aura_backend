@@ -2,3 +2,8 @@ venv
 test.py
 .env
 openai_response.txt
+
+*__pycache__
+
+test_emails.py
+test_image_gen.py

@@ -91,6 +91,23 @@ def create_subscription(plan_key: str, notify_email: str, expire_by: int = None,
         )
 
 
+def pause_subscription(subscription_id: str) -> dict:
+    try:
+        logger.info("Pausing Razorpay subscription", extra={"subscription_id": subscription_id})
+        result = gateway_client.subscription.pause(subscription_id, {"pause_at": "now"})
+        logger.info("Razorpay subscription paused", extra={"subscription_id": subscription_id})
+        return result
+    except BadRequestError as e:
+        logger.error("Razorpay bad request on pause_subscription", extra={"subscription_id": subscription_id, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ServerError as e:
+        logger.error("Razorpay server error on pause_subscription", extra={"subscription_id": subscription_id, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    except Exception as e:
+        logger.error("Unexpected error on pause_subscription", extra={"subscription_id": subscription_id, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 def cancel_subscription(subscription_id: str, cancel_at_cycle_end: int = 0) -> dict:
     try:
         logger.info("Cancelling Razorpay subscription", extra={"subscription_id": subscription_id, "cancel_at_cycle_end": cancel_at_cycle_end})

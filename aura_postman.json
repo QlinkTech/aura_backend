@@ -62,6 +62,18 @@
           }
         },
         {
+          "name": "Request Reset Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/request-reset-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            }
+          }
+        },
+        {
           "name": "Reset Password",
           "request": {
             "method": "POST",
@@ -69,7 +81,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"new_password\": \"newpassword123\"\n}"
+              "raw": "{\n  \"token\": \"<reset_token>\",\n  \"new_password\": \"newpassword123\"\n}"
             }
           }
         }
@@ -244,6 +256,51 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"plan_key\": \"1_year_plan\",\n  \"expire_by\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Subscription",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/payment/subscription?email=user@example.com",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payment", "subscription"],
+              "query": [{ "key": "email", "value": "user@example.com" }]
+            },
+            "header": [
+              { "key": "X-API-Key", "value": "{{admin_api_key}}" }
+            ]
+          }
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/payment/cancel-subscription",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"cancel_at_cycle_end\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Pause Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/payment/pause-subscription",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
             }
           }
         },
