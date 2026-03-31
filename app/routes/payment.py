@@ -55,7 +55,7 @@ async def early_bird_subscription(request: EarlyBirdSubRequest):
 
 @payment_router.post("/subscribe", dependencies=[Security(_verify_api_key)])
 async def create_subscription(request: SubscribeRequest):
-    return create_sub_link(
+    return create_early_bird_sub_link(
         email=request.email,
         plan_key=request.plan_key,
         expire_by=request.expire_by,
