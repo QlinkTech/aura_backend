@@ -75,8 +75,8 @@ def login(email: str, password: str):
         email = email.lower()
         logger.info("Login attempt", extra={"email": email})
         user = user_profile.find_one({"email": email})
-        if not user or not verify_password(password, user["password"]):
-            logger.warning("Login failed - invalid credentials", extra={"email": email})
+        if not user or not user.get("password") or not verify_password(password, user["password"]):
+            logger.warning("Login failed - invalid credentials or create your account.", extra={"email": email})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         token = create_access_token({"sub": email, "email": email})
