@@ -1,17 +1,18 @@
-from openai import OpenAI
-from app.utils.env_load import openai_api_key, cloud_api_key, cloud_api_secret, cloud_name
-from app.utils.send_mail import send_vision_board_ready_email
+from google import genai
+from google.genai import types
+from app.utils.env_load import gemini_api_key, cloud_api_key, cloud_api_secret, cloud_name
+from app.services.brevo.client import send_vision_board_ready_email
 from app.core.vision_board.vision_board_prompt import build_prompt
 from app.services.db.user_profile_utils import update_vision_board
+from app.services.db.mongo_utils import user_profile
 from app.utils.logger_config import logger
 import cloudinary
 import cloudinary.uploader
 import base64
-import httpx
 
 
 # ==== CLIENTS ====
-openai_client = OpenAI(api_key=openai_api_key)
+gemini_client = genai.Client(api_key=gemini_api_key)
 
 cloudinary.config(
     cloud_name=cloud_name,
@@ -20,22 +21,36 @@ cloudinary.config(
 )
 
 
-# ==== OPENAI IMAGE ====
-def openai_image(prompt: str) -> str:
-    logger.info("Generating image with OpenAI DALL-E")
-    response = openai_client.images.generate(
-        model="dall-e-3",
-        prompt=prompt,
-        size="1024x1024",
-        response_format="url",
-        n=1,
+# ==== GEMINI IMAGE ====
+def gemini_image(prompt: str) -> str:
+    logger.info("Generating image with Gemini")
+    contents = [
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=prompt)],
+        ),
+    ]
+    config = types.GenerateContentConfig(
+        response_modalities=["IMAGE", "TEXT"],
     )
 
-    image_url = response.data[0].url
-    image_bytes = httpx.get(image_url).content
-    b64_image = base64.b64encode(image_bytes).decode("utf-8")
-    logger.info("OpenAI image generated successfully")
-    return b64_image
+    for chunk in gemini_client.models.generate_content_stream(
+        model="gemini-2.5-flash-image",
+        contents=contents,
+        config=config,
+    ):
+        if not chunk.candidates:
+            continue
+        parts = chunk.candidates[0].content.parts
+        if not parts:
+            continue
+        for part in parts:
+            if part.inline_data and part.inline_data.data:
+                b64_image = base64.b64encode(part.inline_data.data).decode("utf-8")
+                logger.info("Gemini image generated successfully")
+                return b64_image
+
+    raise ValueError("Gemini did not return an image")
 
 
 # ==== CLOUDINARY UPLOAD ====
@@ -64,14 +79,18 @@ def generate_vision_background(email: str, answers: dict, vibe: dict):
     try:
         logger.info("Starting vision board generation", extra={"email": email})
 
+        #   Inject name from user profile
+        user = user_profile.find_one({"email": email}, {"username": 1})
+        answers["name"] = user.get("username", "") if user else ""
+
         #   Build Prompt
         prompt = build_prompt(answers=answers, vibe=vibe)
         if not isinstance(prompt, str):
             raise ValueError("Prompt is not a string! Got: " + str(type(prompt)))
         logger.info("Vision board prompt built successfully", extra={"email": email})
 
-        #   OpenAI
-        b64_image = openai_image(prompt)
+        #   Gemini
+        b64_image = gemini_image(prompt)
 
         #   Cloudinary
         secure_url = cloudinary_upload(b64_image, email)
@@ -82,8 +101,8 @@ def generate_vision_background(email: str, answers: dict, vibe: dict):
 
         #   Mail
         try:
-            dashboard_link = "https://mmd-frontend.vercel.app/dashboard"
-            send_vision_board_ready_email(email, dashboard_link)
+            name = answers.get("name", "")
+            send_vision_board_ready_email(to_email=email, to_name=name)
             logger.info("Vision board ready email sent", extra={"email": email})
         except Exception as mail_err:
             logger.warning("Skipping email error", extra={"email": email, "error": str(mail_err)})

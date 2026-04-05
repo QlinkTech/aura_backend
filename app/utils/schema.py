@@ -13,10 +13,6 @@ class GenerateVisionRequest(BaseModel):
     answers: dict
     vibe: dict
 
-class ReGenerateVisionModel(BaseModel):
-    email: str
-    answers: dict
-    vibe: dict
 
 class ChatModel(BaseModel):
     message: str

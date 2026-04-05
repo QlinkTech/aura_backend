@@ -7,6 +7,7 @@ from app.services.brevo.email_bodies.welcome import get_welcome_email_html
 from app.services.brevo.email_bodies.account_created import get_account_created_email_html
 from app.services.brevo.email_bodies.reset_password import get_reset_password_email_html
 from app.services.brevo.email_bodies.thank_you import get_thank_you_email_html
+from app.services.brevo.email_bodies.vision_board_ready import get_vision_board_ready_email_html
 
 SENDER_EMAIL = "noreply@manifestwithaura.com"
 SENDER_NAME = "Aura by Sanaya"
@@ -92,6 +93,15 @@ def send_thank_you_email(to_email: str, to_name: str = "") -> dict:
         to_name=to_name,
         subject="Thank you for subscribing — The Aura",
         html_content=get_thank_you_email_html(name=to_name),
+    )
+
+
+def send_vision_board_ready_email(to_email: str, to_name: str = "") -> dict:
+    return send_email(
+        to_email=to_email,
+        to_name=to_name,
+        subject="Your vision board is ready — The Aura",
+        html_content=get_vision_board_ready_email_html(name=to_name),
     )
 
 
