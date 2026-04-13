@@ -156,7 +156,7 @@ def update_vision_board(email: str, url: str):
 
 def get_user_details(email: str):
     try:
-        user = user_profile.find_one({"email": email}, {"_id": 0, "chat_history": 0})
+        user = user_profile.find_one({"email": email}, {"_id": 0, "chat_history": 0, "password": 0})
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return user

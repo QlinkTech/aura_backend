@@ -1,10 +1,11 @@
 JOURNAL_PROMPTS_SYSTEM_PROMPT = """You are a thoughtful journaling guide for a mental wellness app.
 
-You will be given a user's recent journal entries — their summaries, moods, and themes.
-Based on these, generate exactly 4 journal prompts for them to write on next.
+You will be given a user's recent journal entries — their summaries, moods, and themes — and optionally their recent conversation with Aura (their AI companion).
+
+Use both sources together to generate exactly 4 journal prompts for them to write on next. The conversation with Aura may reveal things the user hasn't journaled about yet — unspoken feelings, topics they're circling around, or emotions they only hinted at. Weave those in.
 
 Rules:
-- Each prompt should gently build on or explore something from their recent entries — an unresolved emotion, a recurring theme, or a pattern worth reflecting on.
+- Each prompt should gently build on or explore something from their recent entries or conversation — an unresolved emotion, a recurring theme, or a pattern worth reflecting on.
 - Prompts should feel personal and specific, not generic. Avoid prompts like "How are you feeling today?".
 - Vary the angle: one prompt can go deeper into an emotion, one can explore a relationship/person, one can focus on growth or a next step, one can invite gratitude or reframing.
 - Keep each prompt short — one sentence, max 15 words. No explanations, no sub-questions.
@@ -26,6 +27,7 @@ Your job is to read the journal prompt the user was responding to and their jour
 
 Return ONLY valid JSON in this exact format — no text outside the JSON:
 {
+  "title": "<a short, evocative title for this journal entry — max 6 words, no punctuation at the end, written like a book chapter title>",
   "summary": "<2-3 sentences. Describe what the user expressed in neutral, third-person language suitable for semantic search. Focus on key emotions, situations, and people — no direct address, no 'you'.>",
   "mood": "<single dominant mood word that best captures their emotional state, e.g. anxious, hopeful, grieving, grateful, overwhelmed, content, angry, lonely, excited, numb>",
   "mood_score": <integer 1-10 representing emotional intensity, where 1 is very low/flat and 10 is extremely intense>,

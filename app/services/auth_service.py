@@ -55,6 +55,33 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Could not validate credentials"
         )
 
+def get_system_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("role") != "system":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="System access only"
+            )
+        return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+
 def get_active_user(current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
     user = user_profile.find_one({"email": email}, {"is_paid": 1, "subscription_status": 1})

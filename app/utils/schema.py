@@ -45,5 +45,5 @@ class ManageSubscriptionRequest(BaseModel):
     cancel_at_cycle_end: bool = False  # only used for cancel
 
 class JournalModel(BaseModel):
-    journal_prompt: str
+    journal_prompt: str = ""
     journal_entry: str
