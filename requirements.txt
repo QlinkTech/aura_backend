@@ -21,3 +21,4 @@ sarvamai
 brevo-python
 
 google-genai
+boto3

@@ -9,6 +9,7 @@ system = db["systems"]
 payments = db["payments"]
 journal_log = db["journal_log"]
 password_reset_tokens = db["password_reset_tokens"]
+resources = db["resources"]
 
 
 def return_system_prompt():

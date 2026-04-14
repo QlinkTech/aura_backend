@@ -6,12 +6,12 @@ from app.services.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, pause_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
-EARLY_BIRD_TRIAL_MONTHS = 1
+EARLY_BIRD_TRIAL_WEEKS = 2
 
 
 def _trial_start_at() -> int:
-    """Returns Unix timestamp 3 months from now (start of billing after trial)."""
-    future = datetime.now(timezone.utc) + relativedelta(months=EARLY_BIRD_TRIAL_MONTHS)
+    """Returns Unix timestamp 2 weeks from now (start of billing after trial)."""
+    future = datetime.now(timezone.utc) + relativedelta(weeks=EARLY_BIRD_TRIAL_WEEKS)
     return int(future.timestamp())
 
 # Subscription is active/paid — do not allow new subscription
