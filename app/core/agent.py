@@ -108,7 +108,7 @@ def update_kb(doc_id: str, text: str):
 
 MAX_TOOL_ITERATIONS = 5
 
-def chat_agent(email: str, message: str):
+def chat_agent(email: str, message: str, username: str = ""):
     email = email.lower()
     logger.info("Chat agent invoked", extra={"email": email, "user_message": message})
 
@@ -121,9 +121,10 @@ def chat_agent(email: str, message: str):
         kb_context = get_kb_context(message, k=3)
         rag_context = f"\n---\nTherapist Knowledge Base:\n{kb_context}\n---\n"
 
+        user_context = f"The user's name is {username}. " if username else ""
         messages = [
             {"role": "system", "content": mmd_system_prompt + rag_context},
-            {"role": "system", "content": f"Chat history: {history}"},
+            {"role": "system", "content": f"{user_context}Chat history: {history}"},
             {"role": "user", "content": f"user message: {message}"}
         ]
 

@@ -16,7 +16,7 @@ def chat(data: ChatModel, current_user=Depends(get_active_user)):
     user = user_profile.find_one({"email": email})
     if not user:
         raise HTTPException(status_code=403, detail="No user found")
-    result = chat_agent(email=email, message=data.message)
+    result = chat_agent(email=email, message=data.message, username=user.get("username", ""))
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return {"reply": result["reply"]}
