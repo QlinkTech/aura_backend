@@ -140,7 +140,7 @@ def chat_agent(email: str, message: str):
             result = response.choices[0]
 
             if result.finish_reason != "tool_calls":
-                reply = result.message.content[0].text
+                reply = result.message.content
                 break
 
             tool_call = result.message.tool_calls[0]
