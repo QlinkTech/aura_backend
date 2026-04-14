@@ -122,10 +122,18 @@
           }
         },
         {
+          "name": "Get Vision Questions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/vision-questions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
           "name": "Get Vision Board",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/user/vision-board/user@example.com",
+            "url": "{{base_url}}/api/user/vision-board",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
           }
         },
@@ -140,7 +148,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"answers\": {\n    \"name\": \"Jane\",\n    \"limitless_identity\": \"confident CEO\",\n    \"goals\": \"launch my business\",\n    \"success_metrics\": \"10k MRR\",\n    \"pinch_moment\": \"signing first client\",\n    \"feelings\": \"free and abundant\",\n    \"frequency_anchor\": \"daily gratitude\",\n    \"secret_craving\": \"financial freedom\",\n    \"north_star\": \"peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"boss\"\n  }\n}"
+              "raw": "{\n  \"answers\": {\n    \"limitless_identity\": \"A visionary CEO\",\n    \"goals\": \"Financial freedom\",\n    \"success_metrics\": \"6-figure income\",\n    \"pinch_moment\": \"Signing my first big client\",\n    \"feelings\": \"Free and abundant\",\n    \"frequency_anchor\": \"Daily gratitude practice\",\n    \"secret_craving\": \"Financial independence\",\n    \"north_star\": \"Peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"boss\"\n  }\n}"
             }
           }
         },
@@ -155,7 +163,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"answers\": {\n    \"name\": \"Jane\",\n    \"limitless_identity\": \"confident CEO\",\n    \"goals\": \"launch my business\",\n    \"success_metrics\": \"10k MRR\",\n    \"pinch_moment\": \"signing first client\",\n    \"feelings\": \"free and abundant\",\n    \"frequency_anchor\": \"daily gratitude\",\n    \"secret_craving\": \"financial freedom\",\n    \"north_star\": \"peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"healing\"\n  }\n}"
+              "raw": "{\n  \"answers\": {\n    \"limitless_identity\": \"A visionary CEO\",\n    \"goals\": \"Financial freedom\",\n    \"success_metrics\": \"6-figure income\",\n    \"pinch_moment\": \"Signing my first big client\",\n    \"feelings\": \"Free and abundant\",\n    \"frequency_anchor\": \"Daily gratitude practice\",\n    \"secret_craving\": \"Financial independence\",\n    \"north_star\": \"Peaceful and proud\"\n  },\n  \"vibe\": {\n    \"key\": \"healing\"\n  }\n}"
             }
           }
         },

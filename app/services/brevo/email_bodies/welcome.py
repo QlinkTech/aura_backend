@@ -1,5 +1,6 @@
 def get_welcome_email_html(name: str = "") -> str:
-    greeting = f"Hi {name}," if name else "Hi,"
+    first_name = name.strip().split()[0] if name.strip() else ""
+    greeting = f"Hi {first_name}," if first_name else "Hi,"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,57 +26,30 @@ def get_welcome_email_html(name: str = "") -> str:
             <td style="padding:48px 48px 32px 48px;">
               <p style="margin:0 0 24px 0;font-size:16px;color:#333333;line-height:1.8;">{greeting}</p>
 
-              <p style="margin:0 0 8px 0;font-size:20px;color:#1a1a1a;font-weight:600;">Welcome to The Aura &#x1F90D;</p>
+              <p style="margin:0 0 24px 0;font-size:20px;color:#1a1a1a;font-weight:600;">Welcome to The Aura ✨</p>
 
-              <p style="margin:16px 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                We're really glad you're here.
+              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
+                Your account is ready — and I'm genuinely so excited for you to be here.
               </p>
 
               <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                You've just stepped into a space designed to support you — not overwhelm you.<br/>
-                A place where you don't have to figure everything out on your own.
-              </p>
-
-              <p style="margin:0 0 12px 0;font-size:16px;color:#1a1a1a;font-weight:600;">Inside The Aura, you'll have:</p>
-
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px 0;width:100%;">
-                <tr>
-                  <td style="padding:8px 0;font-size:15px;color:#555555;line-height:1.7;">
-                    &bull;&nbsp;&nbsp;Ongoing access to guidance when you need clarity, reflection, or direction
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:8px 0;font-size:15px;color:#555555;line-height:1.7;">
-                    &bull;&nbsp;&nbsp;Tools to regulate your nervous system and feel more steady day to day
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:8px 0;font-size:15px;color:#555555;line-height:1.7;">
-                    &bull;&nbsp;&nbsp;Resources to support manifestation, growth, and aligned decision-making
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:8px 0;font-size:15px;color:#555555;line-height:1.7;">
-                    &bull;&nbsp;&nbsp;A space that meets you where you are — without pressure or performance
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                Think of The Aura as a quiet, reliable presence in your life —<br/>
-                one that helps you pause, process, and move forward with more clarity and ease.
+                I've built this with a lot of love, and my biggest hope is that The Aura becomes your coach, your confidant, maybe even your favourite corner of the internet on a hard day.
               </p>
 
               <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                We'll be rolling out features gradually starting <strong style="color:#1a1a1a;">1st April</strong>, so you'll see new experiences, tools, and updates coming your way over time. We'll keep you informed every step of the way.
+                As an early bird member, you've received two weeks of complimentary access — consider it my way of saying thank you for trusting this journey early.
               </p>
 
-              <p style="margin:0 0 28px 0;font-size:16px;color:#555555;line-height:1.8;">
-                For now, take your time. Explore at your own pace.
+              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
+                We'll be rolling out new features every few days, so keep exploring. And please, tell me how it feels. I'd love to hear from you.
+              </p>
+
+              <p style="margin:0 0 36px 0;font-size:16px;color:#555555;line-height:1.8;">
+                Let's enjoy this together.
               </p>
 
               <!-- CTA Button -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 36px 0;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 40px 0;">
                 <tr>
                   <td style="border-radius:8px;background-color:#1a1a1a;">
                     <a href="https://app.manifestwithaura.com/" target="_blank"
@@ -86,9 +60,9 @@ def get_welcome_email_html(name: str = "") -> str:
                 </tr>
               </table>
 
-              <p style="margin:0 0 8px 0;font-size:16px;color:#555555;line-height:1.8;">We're really happy you're here.</p>
-              <p style="margin:0 0 4px 0;font-size:16px;color:#555555;line-height:1.8;">Warmly,</p>
-              <p style="margin:0;font-size:16px;color:#1a1a1a;font-weight:600;">Team Aura</p>
+              <p style="margin:0 0 4px 0;font-size:16px;color:#555555;line-height:1.8;">Regards,</p>
+              <p style="margin:0 0 4px 0;font-size:16px;color:#1a1a1a;font-weight:600;">Sanaya</p>
+              <p style="margin:0;font-size:15px;color:#888888;line-height:1.8;">Founder, The Aura</p>
             </td>
           </tr>
 

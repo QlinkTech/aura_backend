@@ -106,13 +106,14 @@ def update_kb(doc_id: str, text: str):
         logger.error("[update_kb] Error", extra={"doc_id": doc_id, "error": str(e)})
         raise e
 
+MAX_TOOL_ITERATIONS = 5
+
 def chat_agent(email: str, message: str):
     email = email.lower()
     logger.info("Chat agent invoked", extra={"email": email, "user_message": message})
 
     prompt = return_system_prompt()
-    if prompt:
-        mmd_system_prompt = prompt.get("prompt", system_prompt)
+    mmd_system_prompt = prompt.get("prompt", system_prompt) if prompt else system_prompt
 
     try:
         history = get_last_chat_history(email)
@@ -120,82 +121,68 @@ def chat_agent(email: str, message: str):
         kb_context = get_kb_context(message, k=3)
         rag_context = f"\n---\nTherapist Knowledge Base:\n{kb_context}\n---\n"
 
-        response = openai_client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": mmd_system_prompt + rag_context},
-                {"role": "system", "content": f"Chat history: {history}"},
-                {"role": "user", "content": f"user message: {message}"}
-            ],
-            tools=tools,
-            tool_choice="auto",
-            temperature=1.0
-        )
+        messages = [
+            {"role": "system", "content": mmd_system_prompt + rag_context},
+            {"role": "system", "content": f"Chat history: {history}"},
+            {"role": "user", "content": f"user message: {message}"}
+        ]
 
-        result = response.choices[0]
+        reply = None
+        for iteration in range(MAX_TOOL_ITERATIONS):
+            response = openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=1.0
+            )
 
-        if result.finish_reason == "tool_calls":
+            result = response.choices[0]
+
+            if result.finish_reason != "tool_calls":
+                reply = result.message.content[0].text
+                break
+
             tool_call = result.message.tool_calls[0]
             func_name = tool_call.function.name
             func_args = json.loads(tool_call.function.arguments)
 
-            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "tool_args": func_args})
+            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
 
-            tool_dispatch = {
-                "get_memory":         lambda: json.dumps(get_memory(email, func_args["memory"])),
-                "update_memory":      lambda: (update_memory(email, func_args["memory"]), f"Memory stored successfully: {func_args['memory']}")[1],
-                "get_journal_context": lambda: json.dumps(get_journal_context(email, func_args["query"])),
-            }
+            if func_name == "get_memory":
+                tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
+            elif func_name == "update_memory":
+                update_memory(email, func_args["memory"])
+                tool_result_content = f"Memory stored successfully: {func_args['memory']}"
+            elif func_name == "get_journal_context":
+                tool_result_content = json.dumps(get_journal_context(email, func_args["query"]))
+            else:
+                logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
+                break
 
-            tool_result_content = tool_dispatch[func_name]()
+            messages.append({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {"name": func_name, "arguments": json.dumps(func_args)}
+                }]
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result_content
+            })
 
-            follow_up = openai_client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    *history,
-                    {
-                        "role": "assistant",
-                        "tool_calls": [
-                            {
-                                "id": tool_call.id,
-                                "type": "function",
-                                "function": {
-                                    "name": func_name,
-                                    "arguments": json.dumps(func_args)
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": tool_result_content
-                    }
-                ],
-                temperature=0.7
-            )
-            reply = follow_up.choices[0].message.content
+        if not reply:
+            logger.warning("Agent loop exhausted without reply", extra={"email": email})
+            reply = "I'm here with you. Could you share a little more about what you mean?"
 
-            logger.info("Reply generated via tool call", extra={"email": email, "tool": func_name})
-            add_chat_history(email, "user", message)
-            add_chat_history(email, "assistant", reply)
-
-            return {
-                "success": True,
-                "reply": reply
-            }
-
-        # No tool call — direct reply
-        reply = result.message.content
-        logger.info("Direct reply generated", extra={"email": email})
         add_chat_history(email, "user", message)
         add_chat_history(email, "assistant", reply)
 
-        return {
-            "success": True,
-            "reply": reply
-        }
+        logger.info("Reply generated", extra={"email": email})
+        return {"success": True, "reply": reply}
 
     except Exception as e:
         logger.error("[chat_agent] Error", extra={"email": email, "error": str(e)})
