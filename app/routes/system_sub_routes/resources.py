@@ -23,8 +23,8 @@ def get_presigned_url(data: dict = Body(...)):
     Body: { "filename": "video.mp4", "content_type": "video/mp4" }
     """
     try:
-        filename = data.get("filename", "")
-        content_type = data.get("content_type", "application/octet-stream")
+        filename = data.get("filename") or ""
+        content_type = data.get("content_type") or "application/octet-stream"
 
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
         r2_key = f"resources/{uuid.uuid4()}.{ext}" if ext else f"resources/{uuid.uuid4()}"
