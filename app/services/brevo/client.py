@@ -9,7 +9,7 @@ from app.services.brevo.email_bodies.reset_password import get_reset_password_em
 from app.services.brevo.email_bodies.thank_you import get_thank_you_email_html
 from app.services.brevo.email_bodies.vision_board_ready import get_vision_board_ready_email_html
 
-SENDER_EMAIL = "noreply@manifestwithaura.com"
+SENDER_EMAIL = "noreply@regulatewithaura.com"
 SENDER_NAME = "Aura by Sanaya"
 
 LIST_REGISTERED = 2   # users who created an account
