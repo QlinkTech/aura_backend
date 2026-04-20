@@ -12,7 +12,7 @@ kb_router = APIRouter()
 @kb_router.post("/kb/upload")
 async def upload_kb(file: UploadFile = File(...)):
     try:
-        logger.info("KB upload request", extra={"filename": file.filename, "content_type": file.content_type})
+        logger.info("KB upload request", extra={"input_file": file.filename, "content_type": file.content_type})
         if file.content_type != "application/pdf":
             return JSONResponse({"error": "Only PDF files allowed"}, status_code=400)
 
@@ -29,7 +29,7 @@ async def upload_kb(file: UploadFile = File(...)):
             embedding = get_embedding(chunk)
             upsert_kb(vector=embedding, text=chunk, doc_id=str(uuid.uuid4()))
 
-        logger.info("KB upload complete", extra={"filename": file.filename, "chunks_uploaded": len(chunks)})
+        logger.info("KB upload complete", extra={"input_file": file.filename, "chunks_uploaded": len(chunks)})
         return {"success": True, "chunks_uploaded": len(chunks)}
 
     except Exception as e:
