@@ -143,28 +143,51 @@ def upsert_kb(
         raise e
 
 
-def chunk_text(text, max_chars=1200, overlap=200):
-    sentences = re.split(r'(?<=[.!?]) +', text)
+def chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> list:
+    # Normalize whitespace while preserving paragraph breaks
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r'[ \t]+', ' ', text)
+
+    # Split on paragraphs first, then sentences — preserves semantic boundaries
+    paragraphs = re.split(r'\n\n+', text)
+    sentences = []
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        for s in re.split(r'(?<=[.!?])\s+', para):
+            s = s.strip()
+            if s:
+                sentences.append(s)
+
     chunks = []
     current = ""
 
     for sentence in sentences:
-        if len(current) + len(sentence) <= max_chars:
-            current += sentence + " "
+        # Hard-split sentences that exceed max_chars on their own
+        if len(sentence) > max_chars:
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            for i in range(0, len(sentence), max_chars - overlap):
+                part = sentence[i:i + max_chars].strip()
+                if part:
+                    chunks.append(part)
+            continue
+
+        if len(current) + 1 + len(sentence) <= max_chars:
+            current = (current + " " + sentence).strip() if current else sentence
         else:
-            chunks.append(current.strip())
-            current = sentence + " "
+            if current:
+                chunks.append(current.strip())
+            # Seed next chunk with the tail of the previous for context continuity
+            overlap_seed = current[-overlap:].strip() if len(current) > overlap else current
+            current = (overlap_seed + " " + sentence).strip() if overlap_seed else sentence
 
     if current:
         chunks.append(current.strip())
 
-    final_chunks = []
-    for i in range(len(chunks)):
-        start = max(0, i - 1)
-        merged = " ".join(chunks[start:i+1])
-        final_chunks.append(merged)
-
-    return final_chunks
+    return [c for c in chunks if c]
 
 
 async def fetch_records_with_metadata(query: str, top_k: int = 3):
