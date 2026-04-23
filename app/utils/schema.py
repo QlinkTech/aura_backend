@@ -47,3 +47,8 @@ class ManageSubscriptionRequest(BaseModel):
 class JournalModel(BaseModel):
     journal_prompt: str = ""
     journal_entry: str
+
+
+class EFTChatModel(BaseModel):
+    message: str
+    session_id: str = None

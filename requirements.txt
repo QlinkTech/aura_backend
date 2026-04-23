@@ -22,3 +22,4 @@ brevo-python
 
 google-genai
 boto3
+elevenlabs

@@ -24,6 +24,7 @@ razorpay_app_secrete = os.getenv("RAZORPAY_APP_SECRETE")
 admin_api_key = os.getenv("ADMIN_API_KEY")
 
 sarvam_api = os.getenv("SARVAM_API")
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 brevo_api_key = os.getenv("BREVO_API_KEY")
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
