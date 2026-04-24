@@ -19,6 +19,10 @@
     {
       "key": "log_id",
       "value": ""
+    },
+    {
+      "key": "eft_session_id",
+      "value": ""
     }
   ],
   "item": [
@@ -229,6 +233,65 @@
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/api/user/journal-logs/{{log_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "EFT Tapping",
+      "item": [
+        {
+          "name": "Chat (Start / Continue Session)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/eft/chat",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Hi, I want to try this\",\n  \"session_id\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Chat (Continue Existing Session)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/eft/chat",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"I've been feeling anxious about work and don't feel good enough.\",\n  \"session_id\": \"{{eft_session_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List EFT Sessions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/eft/sessions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get EFT Session",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/eft/sessions/{{eft_session_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete EFT Session",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/user/eft/sessions/{{eft_session_id}}",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
           }
         }

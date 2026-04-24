@@ -20,8 +20,8 @@ from app.utils.logger_config import logger
 openai_client = OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
-# Rachel — calm, warm voice well suited for guided tapping sessions
-EFT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+# aura — calm, warm voice well suited for guided tapping sessions
+EFT_VOICE_ID = "hnMOqbQV1aV5iom08kJd"
 
 MAX_TOOL_ITERATIONS = 3
 
