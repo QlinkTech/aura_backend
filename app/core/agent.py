@@ -8,7 +8,9 @@ from app.services.db.chat_session_utils import (
     get_session_messages,
     add_session_message,
     set_session_title,
+    list_chat_sessions,
 )
+from app.services.db.journal_utils import get_journal_logs
 from app.utils.logger_config import logger
 import json
 
@@ -110,6 +112,78 @@ def update_kb(doc_id: str, text: str):
     except Exception as e:
         logger.error("[update_kb] Error", extra={"doc_id": doc_id, "error": str(e)})
         raise e
+
+ICE_BREAKER_PROMPT = """You are Sanaya AI, a warm manifestation and wellness coach.
+
+Generate exactly 4 ultra-short conversation-starter chips a user can tap to begin a session.
+Think of them as button labels — brief, punchy, and instantly relatable.
+
+Rules:
+- Max 5 words each. No exceptions.
+- Write in first person fragments ("Feeling stuck lately", "My morning routine", "Fear of being seen")
+- No full sentences, no punctuation at the end
+- Use context provided (moods, themes, people, recent topics) to make them feel personal
+- If no context, use universal wellness/manifestation themes
+- Vary the angle: one emotion, one goal/block, one relationship/situation, one growth
+- Return ONLY valid JSON, no text outside:
+{
+  "starters": ["...", "...", "...", "..."]
+}"""
+
+
+def generate_ice_breakers(email: str, username: str = "") -> dict:
+    email = email.lower()
+    logger.info("Generating ice breakers", extra={"email": email})
+
+    try:
+        context_parts = []
+
+        # Pull themes/moods from recent journals
+        recent_logs = get_journal_logs(email, limit=3)
+        if recent_logs:
+            journal_lines = []
+            for log in recent_logs:
+                journal_lines.append(
+                    f"- mood: {log.get('mood', '')}, theme: {log.get('theme', '')}, "
+                    f"people: {', '.join(log.get('people', []))}"
+                )
+            context_parts.append("Recent journal entries:\n" + "\n".join(journal_lines))
+
+        # Pull title of most recent chat session as a topic hint
+        sessions = list_chat_sessions(email)
+        if sessions:
+            recent_titles = [s["title"] for s in sessions[:3] if s.get("title") and s["title"] != "New Chat"]
+            if recent_titles:
+                context_parts.append("Recent chat topics: " + " | ".join(recent_titles))
+
+        if username:
+            context_parts.insert(0, f"User's name: {username}")
+
+        user_content = "\n\n".join(context_parts) if context_parts else "No prior context available."
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": ICE_BREAKER_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.9,
+        )
+
+        raw = response.choices[0].message.content.strip()
+        result = json.loads(raw)
+        starters = result.get("starters", [])
+
+        logger.info("Ice breakers generated", extra={"email": email, "count": len(starters)})
+        return {"success": True, "starters": starters}
+
+    except json.JSONDecodeError as e:
+        logger.error("[generate_ice_breakers] JSON parse error", extra={"email": email, "error": str(e)})
+        return {"success": False, "message": "Failed to generate starters."}
+    except Exception as e:
+        logger.error("[generate_ice_breakers] Error", extra={"email": email, "error": str(e)})
+        return {"success": False, "message": "Something went wrong. Please try again later."}
+
 
 MAX_TOOL_ITERATIONS = 5
 

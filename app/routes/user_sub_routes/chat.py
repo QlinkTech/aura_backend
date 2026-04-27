@@ -8,7 +8,7 @@ from app.services.db.chat_session_utils import (
     get_session_messages,
     delete_chat_session,
 )
-from app.core.agent import chat_agent
+from app.core.agent import chat_agent, generate_ice_breakers
 from app.utils.logger_config import logger
 
 chat_router = APIRouter()
@@ -30,6 +30,18 @@ def chat(data: ChatModel, current_user=Depends(get_active_user)):
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return {"reply": result["reply"], "session_id": result["session_id"]}
+
+
+@chat_router.get("/chat/ice-breakers")
+def ice_breakers(current_user=Depends(get_active_user)):
+    """Return 4 personalised conversation-starter suggestions for the user."""
+    email = current_user["email"]
+    user = user_profile.find_one({"email": email}, {"username": 1})
+    username = user.get("username", "") if user else ""
+    result = generate_ice_breakers(email=email, username=username)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    return {"starters": result["starters"]}
 
 
 @chat_router.post("/chat/session")
