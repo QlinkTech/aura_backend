@@ -9,6 +9,7 @@ from app.routes.system_sub_routes.stats import stats_router
 from app.routes.system_sub_routes.prompt import prompt_router
 from app.routes.system_sub_routes.kb import kb_router
 from app.routes.system_sub_routes.resources import resources_router
+from app.routes.system_sub_routes.masterclass import masterclass_router
 
 system_router = APIRouter()
 
@@ -18,6 +19,7 @@ system_router.include_router(stats_router, dependencies=_auth)
 system_router.include_router(prompt_router, dependencies=_auth)
 system_router.include_router(kb_router, dependencies=_auth)
 system_router.include_router(resources_router, dependencies=_auth)
+system_router.include_router(masterclass_router, dependencies=_auth)
 
 
 class LoginData(BaseModel):
