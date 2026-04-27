@@ -1,11 +1,16 @@
 
 from openai import OpenAI
-from app.services.db.user_profile_utils import add_chat_history, get_last_chat_history
 from app.services.db.mongo_utils import return_system_prompt
 from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb, fetch_journal
+from app.services.db.chat_session_utils import (
+    create_chat_session,
+    get_chat_session,
+    get_session_messages,
+    add_session_message,
+    set_session_title,
+)
 from app.utils.logger_config import logger
 import json
-
 
 from app.utils.env_load import openai_api_key
 from app.core.agent_utils import system_prompt, tools
@@ -108,24 +113,34 @@ def update_kb(doc_id: str, text: str):
 
 MAX_TOOL_ITERATIONS = 5
 
-def chat_agent(email: str, message: str, username: str = ""):
+
+def chat_agent(email: str, message: str, session_id: str = None, username: str = ""):
     email = email.lower()
-    logger.info("Chat agent invoked", extra={"email": email, "user_message": message})
+    logger.info("Chat agent invoked", extra={"email": email, "session_id": session_id})
 
     prompt = return_system_prompt()
     mmd_system_prompt = prompt.get("prompt", system_prompt) if prompt else system_prompt
 
     try:
-        history = get_last_chat_history(email)
+        # Create a new session if none provided
+        if not session_id:
+            session_id = create_chat_session(email)
+            logger.info("New chat session created", extra={"email": email, "session_id": session_id})
+        else:
+            session = get_chat_session(session_id=session_id, email=email)
+            if not session:
+                return {"success": False, "message": "Session not found."}
 
-        kb_context = get_kb_context(message, k=3)
-        rag_context = f"\n---\nTherapist Knowledge Base:\n{kb_context}\n---\n"
+        history = get_session_messages(session_id=session_id, email=email, limit=20)
+        # Strip timestamps before sending to the model
+        history_for_model = [{"role": m["role"], "content": m["content"]} for m in history]
 
         user_context = f"The user's name is {username}. " if username else ""
         messages = [
-            {"role": "system", "content": mmd_system_prompt + rag_context},
-            {"role": "system", "content": f"{user_context}Chat history: {history}"},
-            {"role": "user", "content": f"user message: {message}"}
+            {"role": "system", "content": mmd_system_prompt},
+            {"role": "system", "content": user_context.strip()},
+            *history_for_model,
+            {"role": "user", "content": message},
         ]
 
         reply = None
@@ -150,7 +165,10 @@ def chat_agent(email: str, message: str, username: str = ""):
 
             logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
 
-            if func_name == "get_memory":
+            if func_name == "search_knowledge_base":
+                kb_result = get_kb_context(func_args["query"], k=3)
+                tool_result_content = json.dumps({"knowledge_base": kb_result})
+            elif func_name == "get_memory":
                 tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
             elif func_name == "update_memory":
                 update_memory(email, func_args["memory"])
@@ -179,11 +197,15 @@ def chat_agent(email: str, message: str, username: str = ""):
             logger.warning("Agent loop exhausted without reply", extra={"email": email})
             reply = "I'm here with you. Could you share a little more about what you mean?"
 
-        add_chat_history(email, "user", message)
-        add_chat_history(email, "assistant", reply)
+        add_session_message(session_id=session_id, email=email, role="user", content=message)
+        add_session_message(session_id=session_id, email=email, role="assistant", content=reply)
 
-        logger.info("Reply generated", extra={"email": email})
-        return {"success": True, "reply": reply}
+        # Set the session title from the first user message
+        if not history:
+            set_session_title(session_id=session_id, email=email, title=message)
+
+        logger.info("Reply generated", extra={"email": email, "session_id": session_id})
+        return {"success": True, "reply": reply, "session_id": session_id}
 
     except Exception as e:
         logger.error("[chat_agent] Error", extra={"email": email, "error": str(e)})

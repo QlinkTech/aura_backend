@@ -92,6 +92,24 @@ tools = [
     {
         "type": "function",
         "function": {
+            "name": "search_knowledge_base",
+            "description": "Search the therapist/coach knowledge base for relevant teachings, frameworks, techniques, or guidance. Use this when the user asks about a concept, method, or topic that may be covered in the knowledge base — e.g. chakras, EFT, nervous system, manifestation principles, boundary work, affirmations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "A short phrase describing what to search for in the knowledge base, e.g. 'root chakra healing', 'nervous system safety', 'EFT tapping for anxiety'"
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "update_memory",
             "description": "Append new memory into the user's long-term memory in the vector database.",
             "parameters": {

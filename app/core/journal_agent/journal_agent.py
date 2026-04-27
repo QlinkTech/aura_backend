@@ -3,7 +3,7 @@ from openai import OpenAI
 from app.utils.env_load import openai_api_key
 from app.utils.logger_config import logger
 from app.services.db.journal_utils import save_journal_log, get_journal_logs
-from app.services.db.user_profile_utils import get_last_chat_history
+from app.services.db.chat_session_utils import list_chat_sessions, get_session_messages
 from app.services.db.pinecone_utils import upsert_journal
 from app.core.agent import get_embedding
 from app.core.journal_agent.journal_agent_utils import JOURNAL_SYSTEM_PROMPT, JOURNAL_PROMPTS_SYSTEM_PROMPT
@@ -105,11 +105,14 @@ def generate_journal_prompts(email: str) -> dict:
             )
         journal_context = "\n\n".join(context_parts)
 
-        recent_chats = get_last_chat_history(email, limit=6)
         chat_context = ""
-        if recent_chats:
-            chat_lines = [f"  {msg['role'].capitalize()}: {msg['content']}" for msg in recent_chats]
-            chat_context = "\n\nRecent conversation with Aura:\n" + "\n".join(chat_lines)
+        sessions = list_chat_sessions(email)
+        if sessions:
+            latest_session_id = sessions[0]["session_id"]
+            recent_chats = get_session_messages(session_id=latest_session_id, email=email, limit=6)
+            if recent_chats:
+                chat_lines = [f"  {msg['role'].capitalize()}: {msg['content']}" for msg in recent_chats]
+                chat_context = "\n\nRecent conversation with Aura:\n" + "\n".join(chat_lines)
 
         user_content = f"Recent journal entries:\n\n{journal_context}{chat_context}"
 

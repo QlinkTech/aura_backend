@@ -1,18 +1,14 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from app.services.db.mongo_utils import user_profile
+from app.services.db.mongo_utils import user_profile, chat_sessions
 from app.utils.logger_config import logger
 
 stats_router = APIRouter()
 
-# Users with a subscription link generated but never completed payment:
-# they have early_bird_sub_id set but is_paid is False
-# subscription_status breakdown covers all states from Razorpay webhooks
-
 
 @stats_router.get("/stats")
 def get_stats():
-    """Return platform stats: user counts, subscription status breakdown, most active user, avg chat length."""
+    """Return platform stats: user counts, subscription status breakdown, most active user, avg messages per session."""
     try:
         total_users = user_profile.count_documents({})
         total_paid = user_profile.count_documents({"is_paid": True})
@@ -36,33 +32,49 @@ def get_stats():
             doc["_id"]: doc["count"] for doc in sub_status_raw
         }
 
-        # Most active user by chat history length
-        most_active_pipeline = [
+        # Total sessions and total messages across all sessions
+        total_sessions = chat_sessions.count_documents({})
+        session_stats_pipeline = [
             {"$project": {
-                "_id": 0,
                 "email": 1,
-                "username": 1,
-                "chat_count": {"$size": {"$ifNull": ["$chat_history", []]}},
-                "last_active": "$updated_at",
-            }},
-            {"$sort": {"chat_count": -1}},
-            {"$limit": 1},
-        ]
-        most_active_result = list(user_profile.aggregate(most_active_pipeline))
-        most_active_user = most_active_result[0] if most_active_result else None
-
-        # Average chat history length across all users
-        avg_pipeline = [
-            {"$project": {
-                "chat_len": {"$size": {"$ifNull": ["$chat_history", []]}}
+                "msg_count": {"$size": {"$ifNull": ["$messages", []]}},
             }},
             {"$group": {
                 "_id": None,
-                "avg_chat_length": {"$avg": "$chat_len"}
+                "total_messages": {"$sum": "$msg_count"},
+                "avg_messages_per_session": {"$avg": "$msg_count"},
             }}
         ]
-        avg_result = list(user_profile.aggregate(avg_pipeline))
-        avg_chat_length = round(avg_result[0]["avg_chat_length"], 2) if avg_result else 0
+        session_stats_result = list(chat_sessions.aggregate(session_stats_pipeline))
+        session_stats = session_stats_result[0] if session_stats_result else {}
+        total_messages = session_stats.get("total_messages", 0)
+        avg_messages_per_session = round(session_stats.get("avg_messages_per_session", 0), 2)
+
+        # Most active user by total messages sent across all their sessions
+        most_active_pipeline = [
+            {"$project": {
+                "email": 1,
+                "msg_count": {"$size": {"$ifNull": ["$messages", []]}},
+            }},
+            {"$group": {
+                "_id": "$email",
+                "total_messages": {"$sum": "$msg_count"},
+                "session_count": {"$sum": 1},
+            }},
+            {"$sort": {"total_messages": -1}},
+            {"$limit": 1},
+        ]
+        most_active_result = list(chat_sessions.aggregate(most_active_pipeline))
+        most_active_user = None
+        if most_active_result:
+            top = most_active_result[0]
+            user_doc = user_profile.find_one({"email": top["_id"]}, {"_id": 0, "username": 1})
+            most_active_user = {
+                "email": top["_id"],
+                "username": user_doc.get("username", "") if user_doc else "",
+                "total_messages": top["total_messages"],
+                "session_count": top["session_count"],
+            }
 
         return {
             "total_users": total_users,
@@ -70,8 +82,10 @@ def get_stats():
             "total_unpaid": total_unpaid,
             "link_generated_not_paid": link_generated_not_paid,
             "subscription_status_breakdown": subscription_status_breakdown,
+            "total_sessions": total_sessions,
+            "total_messages": total_messages,
+            "avg_messages_per_session": avg_messages_per_session,
             "most_active_user": most_active_user,
-            "avg_chat_length": avg_chat_length,
         }
 
     except Exception as e:

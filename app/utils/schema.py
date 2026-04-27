@@ -16,6 +16,7 @@ class GenerateVisionRequest(BaseModel):
 
 class ChatModel(BaseModel):
     message: str
+    session_id: str = None
 
 class PromptModel(BaseModel):
     prompt: str

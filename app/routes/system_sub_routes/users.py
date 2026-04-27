@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from typing import Optional
-from app.services.db.mongo_utils import user_profile
+from app.services.db.mongo_utils import user_profile, chat_sessions
 from app.utils.logger_config import logger
 
 users_router = APIRouter()
@@ -67,12 +67,23 @@ def list_users(
 
 @users_router.get("/users/{email}")
 def get_user(email: str):
-    """Get full user details by email (password excluded)."""
+    """Get full user details by email (password excluded), with chat session summary."""
     try:
         email = email.lower()
-        user = user_profile.find_one({"email": email}, {**EXCLUDED_FIELDS, "_id": 0})
+        user = user_profile.find_one({"email": email}, {**EXCLUDED_FIELDS, "_id": 0, "chat_history": 0})
         if not user:
             return JSONResponse({"error": "User not found"}, status_code=404)
+
+        # Aggregate session stats for this user
+        pipeline = [
+            {"$match": {"email": email}},
+            {"$project": {"msg_count": {"$size": {"$ifNull": ["$messages", []]}}}},
+            {"$group": {"_id": None, "session_count": {"$sum": 1}, "total_messages": {"$sum": "$msg_count"}}},
+        ]
+        result = list(chat_sessions.aggregate(pipeline))
+        user["chat_stats"] = result[0] if result else {"session_count": 0, "total_messages": 0}
+        user["chat_stats"].pop("_id", None)
+
         return user
 
     except Exception as e:

@@ -11,6 +11,7 @@ journal_log = db["journal_log"]
 password_reset_tokens = db["password_reset_tokens"]
 resources = db["resources"]
 eft_sessions = db["eft_sessions"]
+chat_sessions = db["chat_sessions"]
 
 
 def return_system_prompt():
