@@ -10,7 +10,7 @@ from app.utils.logger_config import logger
 RESET_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 
 
-def create_account(email: str, password: str, user_name: str):
+def create_account(email: str, password: str, user_name: str, phone: str = ""):
     try:
         email = email.lower()
         logger.info("Creating account", extra={"email": email})
@@ -26,7 +26,8 @@ def create_account(email: str, password: str, user_name: str):
             user_profile.update_one(
                 {"email": email},
                 {"$set": {
-                    "username": user_name, 
+                    "username": user_name,
+                    "phone": phone,
                     "password": hashed_pw,
                     "chat_history": [],
                     "vision_board_url": "",
@@ -37,7 +38,8 @@ def create_account(email: str, password: str, user_name: str):
         else:
             user_profile.insert_one({
                 "email": email,
-                "username": user_name,  
+                "username": user_name,
+                "phone": phone,
                 "password": hashed_pw,
                 "chat_history": [],
                 "vision_board_url": "",

@@ -4,6 +4,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     user_name: str
+    phone: str = ""
 
 class LoginRequest(BaseModel):
     email: str

@@ -8,7 +8,7 @@ auth_router = APIRouter()
 @auth_router.post("/register")
 def register(payload: RegisterRequest):
     logger.info("Register request", extra={"email": payload.email})
-    return create_account(payload.email, payload.password, payload.user_name)
+    return create_account(payload.email, payload.password, payload.user_name, payload.phone)
 
 @auth_router.post("/login")
 def login_user(payload: LoginRequest):
