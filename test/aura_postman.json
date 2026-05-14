@@ -23,6 +23,18 @@
     {
       "key": "eft_session_id",
       "value": ""
+    },
+    {
+      "key": "guided_viz_session_id",
+      "value": ""
+    },
+    {
+      "key": "notification_id",
+      "value": ""
+    },
+    {
+      "key": "resource_id",
+      "value": ""
     }
   ],
   "item": [
@@ -239,6 +251,112 @@
       ]
     },
     {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "SSE Event Stream",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/events",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Keep this connection open. Receives real-time SSE events.\nEvent types: notification | guided_viz_complete | eft_complete\n\nExample payload:\n{ \"type\": \"notification\", \"notif_type\": \"new_masterclass\", \"title\": \"...\", \"body\": \"...\", \"data\": {} }\n{ \"type\": \"guided_viz_complete\", \"session_id\": \"...\", \"audio_url\": \"...\" }\n{ \"type\": \"eft_complete\", \"session_id\": \"...\", \"audio_url\": \"...\" }"
+          }
+        },
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/notifications",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Unread Count",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/notifications/unread-count",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Mark One Read",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/notifications/{{notification_id}}/read",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/notifications/read-all",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resources",
+      "item": [
+        {
+          "name": "List All Resources",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/resources",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "List — Masterclass Vault",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/user/resources?category=masterclass_vault",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "resources"],
+              "query": [{ "key": "category", "value": "masterclass_vault" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "List — Downloadables",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/user/resources?category=downloadables",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "resources"],
+              "query": [{ "key": "category", "value": "downloadables" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "List — Audio",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/user/resources?category=audio",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "resources"],
+              "query": [{ "key": "category", "value": "audio" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Resource",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/resources/{{resource_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
       "name": "EFT Tapping",
       "item": [
         {
@@ -292,6 +410,50 @@
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/api/user/eft/sessions/{{eft_session_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guided Visualization",
+      "item": [
+        {
+          "name": "Generate Visualization",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/user/guided-viz/generate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"I've been feeling really anxious and overwhelmed lately. Work stress is building up and I can't seem to switch off.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Guided Viz Sessions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/guided-viz/sessions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Guided Viz Session",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/user/guided-viz/sessions/{{guided_viz_session_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete Guided Viz Session",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/user/guided-viz/sessions/{{guided_viz_session_id}}",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
           }
         }
@@ -427,6 +589,97 @@
           }
         },
         {
+          "name": "Resources - Upload Thumbnail",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/resources/thumbnail",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            },
+            "description": "Compresses image to 400px JPEG and uploads to R2. Returns thumbnail_url and thumbnail_r2_key to include in the Add Resource call."
+          }
+        },
+        {
+          "name": "Resources - Get Presigned URL",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/resources/presigned-url",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"sample.mp3\",\n  \"content_type\": \"audio/mpeg\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resources - Add (after upload)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/resources",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Morning Abundance Meditation\",\n  \"category\": \"audio\",\n  \"description\": \"A 10-minute morning abundance meditation to start your day.\",\n  \"r2_key\": \"resources/<uuid>.mp3\",\n  \"url\": \"https://...\",\n  \"thumbnail_url\": \"https://...\",\n  \"thumbnail_r2_key\": \"thumbnails/<uuid>.jpg\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "category must be one of: masterclass_vault | downloadables | audio\nAutomatically pushes a notification to all users on success."
+          }
+        },
+        {
+          "name": "Resources - List All",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/system/resources",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Resources - List by Category",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/system/resources?category=audio",
+              "host": ["{{base_url}}"],
+              "path": ["api", "system", "resources"],
+              "query": [{ "key": "category", "value": "audio" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Resources - Update",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/system/resources/{{resource_id}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"category\": \"downloadables\",\n  \"description\": \"Updated description.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resources - Delete",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/system/resources/{{resource_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
           "name": "KB - Upload PDF",
           "request": {
             "method": "POST",
@@ -497,6 +750,36 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"query\": \"breathing techniques for anxiety\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Send Notification (Broadcast)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/notifications/send",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"all\",\n  \"type\": \"new_masterclass\",\n  \"title\": \"New Masterclass Available\",\n  \"body\": \"Letting Go of What No Longer Serves You — available now.\",\n  \"data\": { \"masterclass_id\": \"abc123\" }\n}"
+            }
+          }
+        },
+        {
+          "name": "Send Notification (Single User)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/system/notifications/send",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"user@example.com\",\n  \"type\": \"system_announcement\",\n  \"title\": \"Welcome back\",\n  \"body\": \"Your account has been updated.\",\n  \"data\": {}\n}"
             }
           }
         }

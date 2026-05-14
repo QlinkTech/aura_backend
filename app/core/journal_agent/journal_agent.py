@@ -5,7 +5,7 @@ from app.utils.logger_config import logger
 from app.services.db.journal_utils import save_journal_log, get_journal_logs
 from app.services.db.chat_session_utils import list_chat_sessions, get_session_messages
 from app.services.db.pinecone_utils import upsert_journal
-from app.core.agent import get_embedding
+from app.core.agent import get_embedding, update_memory
 from app.core.journal_agent.journal_agent_utils import JOURNAL_SYSTEM_PROMPT, JOURNAL_PROMPTS_SYSTEM_PROMPT
 
 openai_client = OpenAI(api_key=openai_api_key)
@@ -55,7 +55,10 @@ def journal_agent(email: str, journal_prompt: str, journal_entry: str) -> dict:
         embedding = get_embedding(summary)
         upsert_journal(email=email, vector=embedding, summary=summary, log_id=log_id)
 
-        logger.info("Journal vector stored in Pinecone", extra={"email": email, "log_id": log_id})
+        ltm_text = f"[Journal] Mood: {mood}. {summary}"
+        update_memory(user=email, memory=ltm_text)
+
+        logger.info("Journal vector stored in Pinecone and LTM", extra={"email": email, "log_id": log_id})
 
         return {
             "success": True,

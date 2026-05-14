@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -5,12 +8,21 @@ from app.routes.auth import auth_router
 from app.routes.user import user_router
 from app.routes.systems import system_router
 from app.routes.payment import payment_router
+from app.services.event_bus import set_loop
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    set_loop(asyncio.get_event_loop())
+    yield
+
 
 app = FastAPI(
     title="Menifest my dreams - qlink",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
  

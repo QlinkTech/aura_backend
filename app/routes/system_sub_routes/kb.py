@@ -4,7 +4,15 @@ from app.core.agent import get_embedding
 from app.services.db.pinecone_utils import upsert_kb, fetch_kb, chunk_text, fetch_records_with_metadata, delete_record_by_id, list_records_by_label
 from app.utils.logger_config import logger
 import uuid
+import re
 import PyPDF2
+
+
+def clean_pdf_text(text: str) -> str:
+    text = re.sub(r'\n +', ' ', text)
+    text = re.sub(r' +', ' ', text)
+    text = re.sub(r'\n+', '\n', text)
+    return text.strip()
 
 kb_router = APIRouter()
 
@@ -20,6 +28,8 @@ async def upload_kb(file: UploadFile = File(...)):
         full_text = ""
         for page in pdf_reader.pages:
             full_text += page.extract_text() or ""
+
+        full_text = clean_pdf_text(full_text)
 
         if not full_text.strip():
             return JSONResponse({"error": "PDF text is empty"}, status_code=400)

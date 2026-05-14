@@ -16,6 +16,7 @@ from app.services.db.eft_utils import (
 from app.services.storage.r2_utils import upload_media
 from app.utils.env_load import openai_api_key, elevenlabs_api_key
 from app.utils.logger_config import logger
+from app.services import event_bus
 
 openai_client = OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
@@ -105,6 +106,12 @@ def eft_chat(email: str, message: str, session_id: str = None) -> dict:
                     audio_url = _generate_and_store_audio(email, session_id, script)
                     mark_session_complete(session_id=session_id, audio_url=audio_url)
                     is_complete = True
+                    event_bus.publish(email, {
+                        "type": "eft_complete",
+                        "title": "Your tapping session is ready",
+                        "body": "Tap to listen.",
+                        "data": {"session_id": session_id, "audio_url": audio_url},
+                    })
                     tool_result_content = json.dumps({"audio_url": audio_url, "success": True})
                 except Exception as audio_err:
                     logger.error("EFT audio generation failed", extra={"email": email, "error": str(audio_err)})

@@ -1,4 +1,5 @@
 
+from concurrent.futures import ThreadPoolExecutor
 from openai import OpenAI
 from app.services.db.mongo_utils import return_system_prompt
 from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb, fetch_journal
@@ -20,6 +21,37 @@ from app.core.agent_utils import system_prompt, tools
 openai_client = OpenAI(
     api_key=openai_api_key
 )
+
+_title_executor = ThreadPoolExecutor(max_workers=2)
+
+
+def _generate_and_set_title(session_id: str, email: str, user_message: str, assistant_reply: str) -> None:
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Generate a short session title (4-6 words max) that captures the core topic "
+                        "of this wellness conversation. No quotes, no punctuation at the end. "
+                        "Examples: 'Work Stress and Burnout', 'Anxiety Around Relationships', "
+                        "'Letting Go of Grief', 'Finding Inner Confidence'."
+                    ),
+                },
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": assistant_reply},
+            ],
+            max_tokens=20,
+            temperature=0.5,
+        )
+        title = response.choices[0].message.content.strip().strip('"').strip("'")
+        set_session_title(session_id=session_id, email=email, title=title)
+        logger.info("Session title generated", extra={"session_id": session_id, "title": title})
+    except Exception as e:
+        logger.warning("Failed to generate session title, falling back to message", extra={"error": str(e)})
+        set_session_title(session_id=session_id, email=email, title=user_message)
+
 
 def get_embedding(text:str):
     response = openai_client.embeddings.create(
@@ -274,9 +306,8 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         add_session_message(session_id=session_id, email=email, role="user", content=message)
         add_session_message(session_id=session_id, email=email, role="assistant", content=reply)
 
-        # Set the session title from the first user message
-        if not history:
-            set_session_title(session_id=session_id, email=email, title=message)
+        if len(history) == 2:
+            _title_executor.submit(_generate_and_set_title, session_id=session_id, email=email, user_message=message, assistant_reply=reply)
 
         logger.info("Reply generated", extra={"email": email, "session_id": session_id})
         return {"success": True, "reply": reply, "session_id": session_id}

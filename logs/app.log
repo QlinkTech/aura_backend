@@ -1,0 +1,192 @@
+{
+  "logged_at": "2026-05-14T11:17:14.160260",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "You're in \u2014 The Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:17:15.013174",
+  "level": "ERROR",
+  "message": "Failed to send email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 65,
+  "to_email": "paleriyapratham@gmail.com",
+  "error": "headers: {'date': 'Thu, 14 May 2026 05:47:16 GMT', 'content-type': 'application/json', 'content-length': '235', 'connection': 'keep-alive', 'access-control-allow-credentials': 'true', 'sib-request-id': '1aee6a86-16d5-98a1-a653-af14a72b3ecd', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'PUT, POST, GET, DELETE, PATCH, OPTIONS', 'x-envoy-upstream-service-time': '5', 'server': 'cloudflare', 'cf-cache-status': 'DYNAMIC', 'cf-ray': '9fb79b75b993ffff-AMS'}, status_code: 401, body: {'message': 'We have detected you are using an unrecognised IP address 103.184.105.77. If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips', 'code': 'unauthorized'}"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:17:52.092072",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "You're in \u2014 The Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:17:53.284688",
+  "level": "ERROR",
+  "message": "Failed to send email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 65,
+  "to_email": "paleriyapratham@gmail.com",
+  "error": "headers: {'date': 'Thu, 14 May 2026 05:47:54 GMT', 'content-type': 'application/json', 'content-length': '235', 'connection': 'keep-alive', 'access-control-allow-credentials': 'true', 'sib-request-id': '14cbab51-e110-9325-91e3-850a81c5057d', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'PUT, POST, GET, DELETE, PATCH, OPTIONS', 'x-envoy-upstream-service-time': '5', 'server': 'cloudflare', 'cf-cache-status': 'DYNAMIC', 'cf-ray': '9fb79c647e8803ff-CDG'}, status_code: 401, body: {'message': 'We have detected you are using an unrecognised IP address 103.184.105.77. If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips', 'code': 'unauthorized'}"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:34:52.041294",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "You're in \u2014 The Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:34:52.895217",
+  "level": "ERROR",
+  "message": "Failed to send email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 65,
+  "to_email": "paleriyapratham@gmail.com",
+  "error": "headers: {'date': 'Thu, 14 May 2026 06:04:54 GMT', 'content-type': 'application/json', 'content-length': '235', 'connection': 'keep-alive', 'access-control-allow-credentials': 'true', 'sib-request-id': '90712dcc-3f40-99a1-917d-e35c9442dd37', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'PUT, POST, GET, DELETE, PATCH, OPTIONS', 'x-envoy-upstream-service-time': '6', 'server': 'cloudflare', 'cf-cache-status': 'DYNAMIC', 'cf-ray': '9fb7b5494bddfe9f-AMS'}, status_code: 401, body: {'message': 'We have detected you are using an unrecognised IP address 103.184.105.73. If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips', 'code': 'unauthorized'}"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:23.315917",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "You're in \u2014 The Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:24.523704",
+  "level": "INFO",
+  "message": "Email sent successfully via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 62,
+  "to_email": "paleriyapratham@gmail.com",
+  "message_id": "<202605140605.63591705653@smtp-relay.mailin.fr>"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:24.524703",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "Welcome to the Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:24.874003",
+  "level": "INFO",
+  "message": "Email sent successfully via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 62,
+  "to_email": "paleriyapratham@gmail.com",
+  "message_id": "<202605140605.26520309071@smtp-relay.mailin.fr>"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:24.875006",
+  "level": "INFO",
+  "message": "Sending email via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 47,
+  "to_email": "paleriyapratham@gmail.com",
+  "subject": "Thank you for subscribing \u2014 The Aura"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:25.303762",
+  "level": "INFO",
+  "message": "Email sent successfully via Brevo",
+  "function_name": "send_email",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 62,
+  "to_email": "paleriyapratham@gmail.com",
+  "message_id": "<202605140605.69258468972@smtp-relay.mailin.fr>"
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:25.304744",
+  "level": "INFO",
+  "message": "Adding contact to Brevo list",
+  "function_name": "add_contact_to_list",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 23,
+  "email": "paleriyapratham@gmail.com",
+  "list_id": 2
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:25.978092",
+  "level": "INFO",
+  "message": "Contact added to Brevo list",
+  "function_name": "add_contact_to_list",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 30,
+  "email": "paleriyapratham@gmail.com",
+  "list_id": 2
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:25.978092",
+  "level": "INFO",
+  "message": "Adding contact to Brevo list",
+  "function_name": "add_contact_to_list",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 23,
+  "email": "paleriyapratham@gmail.com",
+  "list_id": 3
+}
+**************
+
+{
+  "logged_at": "2026-05-14T11:35:26.530770",
+  "level": "INFO",
+  "message": "Contact added to Brevo list",
+  "function_name": "add_contact_to_list",
+  "file_path": "C:\\Users\\prath\\Desktop\\decode\\clients\\sanaya\\aura_server\\app\\services\\brevo\\client.py",
+  "line_number": 30,
+  "email": "paleriyapratham@gmail.com",
+  "list_id": 3
+}
+**************
+

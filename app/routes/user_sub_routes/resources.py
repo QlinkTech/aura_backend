@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from bson import ObjectId
 from app.services.auth_service import get_current_user
@@ -14,9 +14,10 @@ def _serialize(doc: dict) -> dict:
 
 
 @user_resources_router.get("/resources")
-def list_resources(current_user=Depends(get_current_user)):
+def list_resources(category: str = Query(None), current_user=Depends(get_current_user)):
     try:
-        docs = list(resources.find({}, {"r2_key": 0}).sort("created_at", -1))
+        query = {"category": category} if category else {}
+        docs = list(resources.find(query, {"r2_key": 0}).sort("created_at", -1))
         return {"resources": [_serialize(doc) for doc in docs]}
     except Exception as e:
         logger.error("User: error listing resources", extra={"error": str(e)})

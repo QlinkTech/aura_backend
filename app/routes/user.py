@@ -7,6 +7,9 @@ from app.routes.user_sub_routes.journal import journal_router
 from app.routes.user_sub_routes.resources import user_resources_router
 from app.routes.user_sub_routes.eft import eft_router
 from app.routes.user_sub_routes.masterclass import masterclass_user_router
+from app.routes.user_sub_routes.guided_viz import guided_viz_router
+from app.routes.user_sub_routes.events import events_router
+from app.routes.user_sub_routes.notifications import notifications_user_router
 
 user_router = APIRouter()
 
@@ -18,3 +21,6 @@ user_router.include_router(journal_router)
 user_router.include_router(user_resources_router)
 user_router.include_router(eft_router)
 user_router.include_router(masterclass_user_router)
+user_router.include_router(guided_viz_router)
+user_router.include_router(events_router)
+user_router.include_router(notifications_user_router)

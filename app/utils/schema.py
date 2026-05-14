@@ -54,3 +54,13 @@ class JournalModel(BaseModel):
 class EFTChatModel(BaseModel):
     message: str
     session_id: str = None
+
+class GuidedVizModel(BaseModel):
+    message: str
+
+class SendNotificationModel(BaseModel):
+    target: str          # "all" or a specific email
+    type: str            # e.g. "new_masterclass", "system_announcement"
+    title: str
+    body: str
+    data: dict = {}

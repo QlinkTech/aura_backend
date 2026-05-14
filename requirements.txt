@@ -23,3 +23,6 @@ brevo-python
 google-genai
 boto3
 elevenlabs
+pydub
+sse-starlette
+Pillow

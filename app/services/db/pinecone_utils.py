@@ -267,29 +267,20 @@ def list_records_by_label(namespace: str = pinecone_kb_namespace):
     """Fetch all records in the given namespace filtered by label (agent/general)."""
     try:
         logger.info("Listing Pinecone KB records", extra={"namespace": namespace})
+
+        all_ids = [item.id for page in index.list(namespace=namespace) for item in page.vectors]
+        if not all_ids:
+            return []
+
         output = []
-        meta_response = None
-        response = list(index.list(namespace=namespace))
-        if response:
-            m_respose = index.fetch(
-                ids=response[0],
-                namespace=namespace
-            )
-
-            vectors = m_respose.vectors
-
-            meta_response = list( {
-                "id": vid,
-                "metadata": vec.metadata
-            }
-            for vid, vec in vectors.items())
-
-            output = []
-            for mr in meta_response:
-                output.append(mr)
+        for i in range(0, len(all_ids), 100):
+            batch = all_ids[i:i+100]
+            m_response = index.fetch(ids=batch, namespace=namespace)
+            for vid, vec in m_response.vectors.items():
+                output.append({"id": vid, "metadata": vec.metadata})
 
         logger.info("KB records listed", extra={"namespace": namespace, "count": len(output)})
-        return output if output else []
+        return output
     except Exception as e:
         logger.error("Error listing KB records", extra={"namespace": namespace, "error": str(e)})
         raise e
