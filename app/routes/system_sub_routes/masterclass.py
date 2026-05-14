@@ -2,6 +2,8 @@ import time
 from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
 from app.services.db.mongo_utils import masterclass as masterclass_col
+from app.services.db.notification_utils import send_notification
+from app.services import event_bus
 from app.utils.logger_config import logger
 
 masterclass_router = APIRouter()
@@ -49,6 +51,17 @@ def upsert_masterclass(data: dict = Body(...)):
 
         masterclass_col.update_one(_FILTER, {"$set": doc}, upsert=True)
         logger.info("System: masterclass upserted", extra={"title": title})
+
+        sse_payload = {
+            "type": "new_masterclass",
+            "title": "New Masterclass Available",
+            "body": title,
+            "data": {},
+        }
+        emails = send_notification(target="all", notif_type="new_masterclass", title="New Masterclass Available", body=title, data={})
+        for email in emails:
+            event_bus.publish(email, sse_payload)
+
         return {"success": True, "masterclass": {k: v for k, v in doc.items() if not k.startswith("_")}}
 
     except Exception as e:
