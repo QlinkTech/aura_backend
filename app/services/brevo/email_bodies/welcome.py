@@ -26,40 +26,22 @@ def get_welcome_email_html(name: str = "") -> str:
             <td style="padding:48px 48px 32px 48px;">
               <p style="margin:0 0 24px 0;font-size:16px;color:#333333;line-height:1.8;">{greeting}</p>
 
-              <p style="margin:0 0 24px 0;font-size:20px;color:#1a1a1a;font-weight:600;">Welcome to Aura ✨</p>
+              <p style="margin:0 0 24px 0;font-size:20px;color:#1a1a1a;font-weight:600;">You're officially a part of Aura ✨</p>
 
               <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                We're so happy you're here.
-              </p>
-
-              <p style="margin:0 0 16px 0;font-size:16px;color:#555555;line-height:1.8;">
-                Aura works best when you use it like a real support system, not just another app you scroll through once and forget about. So here's a simple guide to help you begin.
-              </p>
-
-              <p style="margin:0 0 12px 0;font-size:16px;color:#555555;line-height:1.8;font-weight:600;">We recommend starting like this:</p>
-
-              <ul style="margin:0 0 24px 0;padding-left:20px;font-size:16px;color:#555555;line-height:2;">
-                <li>Open Miss Aura and start with whatever feels most emotionally present for you right now. Don't worry about asking the "perfect" question.</li>
-                <li>Use Aura in real moments. During overwhelm, emotional spirals, confusion, burnout, self-doubt, relationship stress, business stress, anxiety, or when you simply need grounding and clarity.</li>
-                <li>Explore the different tools inside the platform slowly. Try the journaling prompts, EFT tapping, nervous system exercises, visualisations, regulation practices, and mindset rewiring tools based on what feels aligned to you that day.</li>
-                <li>The more honestly and consistently you engage, the more personalised and supportive your experience becomes over time.</li>
-                <li>You do not need to consume everything at once. This is a space you return to, not race through.</li>
-              </ul>
-
-              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                We're building Aura very intentionally, and your feedback genuinely matters to us.
+                Your subscription is confirmed and you now have <strong style="color:#1a1a1a;">complete access</strong> to everything inside Aura.
               </p>
 
               <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                If you face any technical issues, login or payment concerns, confusion while using the platform, or if something doesn't feel smooth, please reply to this email and our team will help you out.
+                This is your space — to come back to as often as you need, in the moments that matter most. We're honoured you chose Aura as part of your support system.
+              </p>
+
+              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
+                If you ever face any technical issues, payment concerns, or anything that doesn't feel smooth, simply reply to this email and our team will be right there.
               </p>
 
               <p style="margin:0 0 36px 0;font-size:16px;color:#555555;line-height:1.8;">
-                And if there's something you love, something you wish existed inside Aura, or a moment where the platform genuinely helped you, we would LOVE to hear from you too. Your feedback helps us make Aura better for every woman inside this space.
-              </p>
-
-              <p style="margin:0 0 24px 0;font-size:16px;color:#555555;line-height:1.8;">
-                Thank you for being here.
+                Thank you for investing in yourself. We don't take that lightly.
               </p>
 
               <!-- CTA Button -->
@@ -83,7 +65,7 @@ def get_welcome_email_html(name: str = "") -> str:
           <tr>
             <td style="background-color:#f9f7f4;padding:24px 48px;text-align:center;border-top:1px solid #eeeeee;">
               <p style="margin:0;font-size:12px;color:#aaaaaa;line-height:1.6;">
-                You're receiving this email because you created an account on Aura.<br/>
+                You're receiving this email because you subscribed to Aura.<br/>
                 &copy; 2025 Aura. All rights reserved.
               </p>
             </td>
