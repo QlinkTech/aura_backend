@@ -14,11 +14,24 @@ def _serialize(doc: dict) -> dict:
 
 
 @user_resources_router.get("/resources")
-def list_resources(category: str = Query(None), current_user=Depends(get_current_user)):
+def list_resources(
+    category: str = Query(None, description="Filter by category, omit for all"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    _: dict = Depends(get_current_user),
+):
     try:
-        query = {"category": category} if category else {}
-        docs = list(resources.find(query, {"r2_key": 0}).sort("created_at", -1))
-        return {"resources": [_serialize(doc) for doc in docs]}
+        query = {} if not category or category.lower() == "all" else {"category": category}
+        skip = (page - 1) * limit
+        total = resources.count_documents(query)
+        docs = list(resources.find(query, {"r2_key": 0}).sort("created_at", -1).skip(skip).limit(limit))
+        return {
+            "resources": [_serialize(doc) for doc in docs],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": (total + limit - 1) // limit,
+        }
     except Exception as e:
         logger.error("User: error listing resources", extra={"error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)
