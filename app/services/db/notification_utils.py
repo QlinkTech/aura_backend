@@ -1,8 +1,11 @@
 import time
 import uuid
+from datetime import datetime, timezone, timedelta
 
 from app.services.db.mongo_utils import notifications, user_profile
 from app.utils.logger_config import logger
+
+notifications.create_index("expires_at", expireAfterSeconds=0, background=True)
 
 
 def _build_doc(email: str, notif_type: str, title: str, body: str, data: dict) -> dict:
@@ -15,6 +18,7 @@ def _build_doc(email: str, notif_type: str, title: str, body: str, data: dict) -
         "data": data or {},
         "is_read": False,
         "created_at": int(time.time()),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=10),
     }
 
 
