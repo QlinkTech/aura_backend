@@ -28,7 +28,11 @@ app = FastAPI(
  
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[
+        "https://sanaya-dashboard.vercel.app",
+        "https://app.regulatewithaura.com",
+        "https://app.manifestwithaura.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
