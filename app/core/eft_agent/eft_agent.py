@@ -110,7 +110,7 @@ def eft_chat(email: str, message: str, session_id: str = None) -> dict:
                         "type": "eft_complete",
                         "title": "Your tapping session is ready",
                         "body": "Tap to listen.",
-                        "data": {"session_id": session_id, "audio_url": audio_url},
+                        "data": {"session_id": session_id, "audio_url": audio_url, "url": "https://app.regulatewithaura.com/eft-tapping"},
                     })
                     tool_result_content = json.dumps({"audio_url": audio_url, "success": True})
                 except Exception as audio_err:

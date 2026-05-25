@@ -220,7 +220,7 @@ def generate_ice_breakers(email: str, username: str = "") -> dict:
 MAX_TOOL_ITERATIONS = 5
 
 
-def chat_agent(email: str, message: str, session_id: str = None, username: str = ""):
+def chat_agent(email: str, message: str, session_id: str = None, username: str = "", source: str = "direct"):
     email = email.lower()
     logger.info("Chat agent invoked", extra={"email": email, "session_id": session_id})
 
@@ -230,7 +230,7 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
     try:
         # Create a new session if none provided
         if not session_id:
-            session_id = create_chat_session(email)
+            session_id = create_chat_session(email, source=source)
             logger.info("New chat session created", extra={"email": email, "session_id": session_id})
         else:
             session = get_chat_session(session_id=session_id, email=email)

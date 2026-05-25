@@ -15,9 +15,13 @@ class GenerateVisionRequest(BaseModel):
     vibe: dict
 
 
+class NewSessionRequest(BaseModel):
+    source: str = "direct"
+
 class ChatModel(BaseModel):
     message: str
     session_id: str = None
+    source: str = "direct"
 
 class PromptModel(BaseModel):
     prompt: str

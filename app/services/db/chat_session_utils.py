@@ -5,12 +5,13 @@ from app.services.db.mongo_utils import chat_sessions
 from app.utils.logger_config import logger
 
 
-def create_chat_session(email: str) -> str:
+def create_chat_session(email: str, source: str = "direct") -> str:
     session_id = str(uuid.uuid4())
     chat_sessions.insert_one({
         "session_id": session_id,
         "email": email,
         "title": "New Chat",
+        "source": source,
         "messages": [],
         "created_at": int(time.time()),
         "updated_at": int(time.time()),
@@ -26,10 +27,13 @@ def get_chat_session(session_id: str, email: str) -> dict | None:
     )
 
 
-def list_chat_sessions(email: str) -> list:
+def list_chat_sessions(email: str, source: str = None) -> list:
+    query = {"email": email}
+    if source:
+        query["source"] = source
     sessions = chat_sessions.find(
-        {"email": email},
-        {"_id": 0, "session_id": 1, "title": 1, "created_at": 1, "updated_at": 1}
+        query,
+        {"_id": 0, "session_id": 1, "title": 1, "source": 1, "created_at": 1, "updated_at": 1}
     ).sort("updated_at", -1)
     return list(sessions)
 

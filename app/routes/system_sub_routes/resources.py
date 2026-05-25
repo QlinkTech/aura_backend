@@ -129,13 +129,13 @@ def add_resource(data: dict = Body(...)):
             notif_type="new_resource",
             title=title,
             body=f"{name} — {body}" if name else body,
-            data={"resource_id": resource_id, "category": category},
+            data={"resource_id": resource_id, "category": category, "url": "https://app.regulatewithaura.com/resources"},
         )
         sse_payload = {
             "type": "new_resource",
             "title": title,
             "body": f"{name} — {body}" if name else body,
-            "data": {"resource_id": resource_id, "category": category},
+            "data": {"resource_id": resource_id, "category": category, "url": "https://app.regulatewithaura.com/resources"},
         }
         for email in emails:
             event_bus.publish(email, sse_payload)

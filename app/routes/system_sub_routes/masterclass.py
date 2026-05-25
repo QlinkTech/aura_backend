@@ -56,9 +56,9 @@ def upsert_masterclass(data: dict = Body(...)):
             "type": "new_masterclass",
             "title": "New Masterclass Available",
             "body": title,
-            "data": {},
+            "data": {"url": "https://app.regulatewithaura.com/events"},
         }
-        emails = send_notification(target="all", notif_type="new_masterclass", title="New Masterclass Available", body=title, data={})
+        emails = send_notification(target="all", notif_type="new_masterclass", title="New Masterclass Available", body=title, data={"url": "https://app.regulatewithaura.com/events"})
         for email in emails:
             event_bus.publish(email, sse_payload)
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.utils.schema import ChatModel
+from typing import Optional
+from app.utils.schema import ChatModel, NewSessionRequest
 from app.services.auth_service import get_active_user
 from app.services.db.mongo_utils import user_profile
 from app.services.db.chat_session_utils import (
@@ -26,6 +27,7 @@ def chat(data: ChatModel, current_user=Depends(get_active_user)):
         message=data.message,
         session_id=data.session_id,
         username=user.get("username", ""),
+        source=data.source,
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
@@ -45,19 +47,20 @@ def ice_breakers(current_user=Depends(get_active_user)):
 
 
 @chat_router.post("/chat/session")
-def new_session(current_user=Depends(get_active_user)):
+def new_session(data: Optional[NewSessionRequest] = None, current_user=Depends(get_active_user)):
     """Create a fresh chat session and return its ID."""
     email = current_user["email"]
-    session_id = create_chat_session(email)
+    source = data.source if data else "direct"
+    session_id = create_chat_session(email, source=source)
     logger.info("New chat session created via route", extra={"email": email, "session_id": session_id})
     return {"session_id": session_id}
 
 
 @chat_router.get("/chat/sessions")
-def get_sessions(current_user=Depends(get_active_user)):
-    """List all chat sessions for the user, newest first."""
+def get_sessions(source: Optional[str] = None, current_user=Depends(get_active_user)):
+    """List all chat sessions for the user, newest first. Filter by source if provided."""
     email = current_user["email"]
-    sessions = list_chat_sessions(email)
+    sessions = list_chat_sessions(email, source=source)
     return {"sessions": sessions}
 
 
