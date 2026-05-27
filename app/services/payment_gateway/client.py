@@ -61,7 +61,6 @@ def create_subscription(plan_key: str, notify_email: str, expire_by: int = None,
             "quantity": quantity,
             "customer_notify": True,
             "notify_info": notify_info,
-            "redirect_url": "https://app.regulatewithaura.com/dashboard?payment=success",
         }
         if expire_by is not None:
             payload["expire_by"] = expire_by
