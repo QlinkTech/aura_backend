@@ -94,12 +94,13 @@ def save_subscription_event(event: str, subscription: dict):
         upsert=True
     )
 
-    # Try email first, fall back to subscription_id stored on the profile
+    # Match by subscription_id first — the webhook email can differ from the signup email
+    # (e.g. user types a different email during UPI checkout)
     profile = None
-    if email:
-        profile = user_profile.find_one({"email": email})
-    if profile is None and subscription_id:
+    if subscription_id:
         profile = user_profile.find_one({"early_bird_sub_id": subscription_id})
+    if profile is None and email:
+        profile = user_profile.find_one({"email": email})
 
     if profile:
         effective_is_paid = is_paid
