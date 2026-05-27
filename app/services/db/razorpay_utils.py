@@ -102,13 +102,18 @@ def save_subscription_event(event: str, subscription: dict):
         profile = user_profile.find_one({"early_bird_sub_id": subscription_id})
 
     if profile:
+        effective_is_paid = is_paid
+        if event == "subscription.cancelled":
+            trial_end_at = profile.get("trial_end_at", 0)
+            effective_is_paid = int(time.time()) < trial_end_at
+
         update_fields = {
             "subscription_status": resolved_status,
-            "is_paid": is_paid,
+            "is_paid": effective_is_paid,
             "updated_at": int(time.time()),
         }
         # Keep early_bird_sub_id pointing to the active subscription
-        if is_paid:
+        if effective_is_paid:
             update_fields["early_bird_sub_id"] = subscription_id
 
         user_profile.update_one({"_id": profile["_id"]}, {"$set": update_fields})

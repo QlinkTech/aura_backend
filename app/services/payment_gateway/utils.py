@@ -17,15 +17,16 @@ def _trial_start_at() -> int:
 # Subscription is active/paid — do not allow new subscription
 _PAID_STATUSES = {"active", "pending", "halted", "completed", "authenticated"}
 # Subscription was created but user hasn't paid yet — allow plan switch
-_UNPAID_STATUSES = {"created", "authenticated"}
+_UNPAID_STATUSES = {"created"}
 
 def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = None) -> dict:
     logger.info("Creating subscription", extra={"email": email, "plan_key": plan_key})
+    trial_end_at = _trial_start_at()
     subscription = create_subscription(
         plan_key=plan_key,
         notify_email=email,
         expire_by=expire_by,
-        start_at=_trial_start_at(),
+        start_at=trial_end_at,
     )
     sub_id = subscription.get("id")
     payment_link = subscription.get("short_url", "")
@@ -35,6 +36,7 @@ def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = N
             "early_bird_sub_id": sub_id,
             "early_bird_plan_key": plan_key,
             "early_bird_payment_link": payment_link,
+            "trial_end_at": trial_end_at,
             "updated_at": int(time.time()),
         }}
     )

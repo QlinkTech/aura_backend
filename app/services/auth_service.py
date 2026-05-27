@@ -1,3 +1,4 @@
+import time
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
@@ -84,9 +85,16 @@ def get_system_user(token: str = Depends(oauth2_scheme)):
 
 def get_active_user(current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
-    user = user_profile.find_one({"email": email}, {"is_paid": 1, "subscription_status": 1})
+    user = user_profile.find_one({"email": email}, {"is_paid": 1, "subscription_status": 1, "trial_end_at": 1})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Lazily revoke access for cancelled-mid-trial users once the trial window passes
+    if user.get("is_paid") and user.get("subscription_status") == "cancelled":
+        if int(time.time()) >= user.get("trial_end_at", 0):
+            user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
+
     if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES:
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")

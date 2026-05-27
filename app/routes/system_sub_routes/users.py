@@ -8,7 +8,26 @@ from app.utils.logger_config import logger
 users_router = APIRouter()
 
 EXCLUDED_FIELDS = {"password": 0}
-LIST_FIELDS = {"_id": 0, "email": 1, "username": 1, "is_paid": 1, "early_bird_plan_key": 1, "created_at": 1, "updated_at": 1}
+LIST_FIELDS = {
+    "_id": 0, "email": 1, "username": 1, "phone": 1,
+    "is_paid": 1, "early_bird_plan_key": 1, "early_bird_sub_id": 1,
+    "subscription_status": 1, "trial_end_at": 1, "created_at": 1, "updated_at": 1,
+}
+
+_ACTIVE_PAYMENT_STATUSES = {"active", "authenticated", "charged"}
+
+def _resolve_payment_status(doc: dict) -> str:
+    is_paid = doc.get("is_paid", False)
+    sub_status = doc.get("subscription_status")
+    has_sub = bool(doc.get("early_bird_sub_id"))
+
+    if is_paid:
+        return "active" if sub_status in _ACTIVE_PAYMENT_STATUSES else "granted_access"
+    if sub_status:
+        return sub_status
+    if has_sub:
+        return "payment_pending"
+    return "not_initiated"
 
 
 @users_router.get("/users")
@@ -46,8 +65,11 @@ def list_users(
             users.append({
                 "email": doc.get("email", ""),
                 "username": doc.get("username", ""),
+                "phone": doc.get("phone", ""),
                 "is_paid": doc.get("is_paid", False),
+                "payment_status": _resolve_payment_status(doc),
                 "plan": doc.get("early_bird_plan_key") if doc.get("is_paid") else None,
+                "trial_end_at": doc.get("trial_end_at"),
                 "last_active": doc.get("updated_at"),
                 "created_at": doc.get("created_at"),
             })
