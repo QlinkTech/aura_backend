@@ -22,6 +22,10 @@ def _resolve_payment_status(doc: dict) -> str:
     has_sub = bool(doc.get("early_bird_sub_id"))
 
     if is_paid:
+        if sub_status == "cancelled":
+            trial_end_at = doc.get("trial_end_at", 0)
+            if trial_end_at and int(time.time()) < trial_end_at:
+                return "trial_active"
         return "active" if sub_status in _ACTIVE_PAYMENT_STATUSES else "granted_access"
     if sub_status:
         return sub_status

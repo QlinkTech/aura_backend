@@ -70,7 +70,12 @@ def create_early_bird_sub_link(email: str, plan_key: str, expire_by: int = None)
             logger.info("No existing subscription — creating new one", extra={"email": email})
             return _create_and_store_subscription(email, plan_key, expire_by)
 
-        existing_sub = fetch_subscription(existing_sub_id)
+        try:
+            existing_sub = fetch_subscription(existing_sub_id)
+        except HTTPException:
+            logger.warning("Existing sub_id not found on Razorpay — creating new one", extra={"email": email, "sub_id": existing_sub_id})
+            return _create_and_store_subscription(email, plan_key, expire_by)
+
         existing_status = existing_sub.get("status")
         existing_plan_key = user.get("early_bird_plan_key")
 
@@ -125,7 +130,12 @@ def create_sub_link(email: str, plan_key: str, expire_by: int = None) -> dict:
         if not existing_sub_id:
             return _create_and_store_subscription(email, plan_key, expire_by)
 
-        existing_sub = fetch_subscription(existing_sub_id)
+        try:
+            existing_sub = fetch_subscription(existing_sub_id)
+        except HTTPException:
+            logger.warning("Existing sub_id not found on Razorpay — creating new one", extra={"email": email, "sub_id": existing_sub_id})
+            return _create_and_store_subscription(email, plan_key, expire_by)
+
         existing_status = existing_sub.get("status")
         existing_plan_key = user.get("early_bird_plan_key")
 

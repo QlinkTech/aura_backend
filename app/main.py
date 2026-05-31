@@ -20,8 +20,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Menifest my dreams - qlink",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
     lifespan=lifespan,
 )
 

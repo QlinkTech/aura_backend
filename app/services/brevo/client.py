@@ -14,6 +14,8 @@ SENDER_NAME = "Aura by Sanaya"
 
 LIST_REGISTERED = 2   # users who created an account
 LIST_SUBSCRIBED  = 3  # users who paid/subscribed
+LIST_CANCELLED   = 8  # users who cancelled their subscription
+LIST_HALTED      = 9  # users whose subscription is halted
 
 brevo_client = Brevo(api_key=brevo_api_key)
 
@@ -34,12 +36,32 @@ def add_contact_to_list(email: str, name: str = "", list_id: int = None) -> dict
         raise
 
 
+def remove_contact_from_list(email: str, list_id: int) -> None:
+    try:
+        logger.info("Removing contact from Brevo list", extra={"email": email, "list_id": list_id})
+        brevo_client.contacts.remove_contact_from_list(
+            list_id=list_id,
+            contacts={"emails": [email]},
+        )
+        logger.info("Contact removed from Brevo list", extra={"email": email, "list_id": list_id})
+    except Exception as e:
+        logger.error("Failed to remove contact from Brevo list", extra={"email": email, "list_id": list_id, "error": str(e)})
+
+
 def add_registered_contact(email: str, name: str = ""):
     return add_contact_to_list(email=email, name=name, list_id=LIST_REGISTERED)
 
 
 def add_subscribed_contact(email: str, name: str = ""):
     return add_contact_to_list(email=email, name=name, list_id=LIST_SUBSCRIBED)
+
+
+def add_cancelled_contact(email: str, name: str = ""):
+    return add_contact_to_list(email=email, name=name, list_id=LIST_CANCELLED)
+
+
+def add_halted_contact(email: str, name: str = ""):
+    return add_contact_to_list(email=email, name=name, list_id=LIST_HALTED)
 
 
 def send_email(to_email: str, to_name: str, subject: str, html_content: str) -> dict:

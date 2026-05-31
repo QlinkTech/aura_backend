@@ -1,7 +1,11 @@
 import time
 from app.utils.logger_config import logger
 from app.services.db.mongo_utils import user_profile, payments
-from app.services.brevo.client import send_welcome_email, send_thank_you_email, add_subscribed_contact
+from app.services.brevo.client import (
+    send_welcome_email, send_thank_you_email,
+    add_subscribed_contact, add_cancelled_contact, add_halted_contact,
+    remove_contact_from_list, LIST_SUBSCRIBED, LIST_CANCELLED, LIST_HALTED,
+)
 
 
 
@@ -142,5 +146,33 @@ def save_subscription_event(event: str, subscription: dict):
                 logger.info("Thank you email sent", extra={"email": email})
             except Exception as e:
                 logger.error("Failed to send thank you email", extra={"email": email, "error": str(e)})
+
+        if event in ("subscription.authenticated", "subscription.activated", "subscription.charged", "subscription.resumed") and email:
+            try:
+                username = profile.get("username", "")
+                add_subscribed_contact(email=email, name=username)
+                remove_contact_from_list(email=email, list_id=LIST_CANCELLED)
+                remove_contact_from_list(email=email, list_id=LIST_HALTED)
+                logger.info("Contact moved to subscribed list", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to move contact to subscribed list", extra={"email": email, "error": str(e)})
+
+        if event == "subscription.cancelled" and email:
+            try:
+                username = profile.get("username", "")
+                add_cancelled_contact(email=email, name=username)
+                remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
+                logger.info("Contact moved to cancelled list", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to update cancelled contact lists", extra={"email": email, "error": str(e)})
+
+        if event == "subscription.halted" and email:
+            try:
+                username = profile.get("username", "")
+                add_halted_contact(email=email, name=username)
+                remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
+                logger.info("Contact moved to halted list", extra={"email": email})
+            except Exception as e:
+                logger.error("Failed to move contact to halted list", extra={"email": email, "error": str(e)})
     else:
         logger.warning("No user profile found for subscription event", extra={"event": event, "subscription_id": subscription_id, "email": email})
