@@ -1,5 +1,6 @@
 from brevo import Brevo
 from brevo.transactional_emails import SendTransacEmailRequestSender, SendTransacEmailRequestToItem
+from brevo.contacts.types import RemoveContactFromListRequestBodyEmails
 from fastapi import HTTPException, status
 from app.utils.env_load import brevo_api_key
 from app.utils.logger_config import logger
@@ -8,6 +9,8 @@ from app.services.brevo.email_bodies.account_created import get_account_created_
 from app.services.brevo.email_bodies.reset_password import get_reset_password_email_html
 from app.services.brevo.email_bodies.thank_you import get_thank_you_email_html
 from app.services.brevo.email_bodies.vision_board_ready import get_vision_board_ready_email_html
+from app.services.brevo.email_bodies.subscription_cancelled import get_subscription_cancelled_email_html
+from app.services.brevo.email_bodies.trial_ended import get_trial_ended_email_html
 
 SENDER_EMAIL = "noreply@regulatewithaura.com"
 SENDER_NAME = "Aura by Sanaya"
@@ -16,6 +19,7 @@ LIST_REGISTERED = 2   # users who created an account
 LIST_SUBSCRIBED  = 3  # users who paid/subscribed
 LIST_CANCELLED   = 8  # users who cancelled their subscription
 LIST_HALTED      = 9  # users whose subscription is halted
+LIST_TRIAL       = 10 # users currently within their trial period
 
 brevo_client = Brevo(api_key=brevo_api_key)
 
@@ -41,11 +45,14 @@ def remove_contact_from_list(email: str, list_id: int) -> None:
         logger.info("Removing contact from Brevo list", extra={"email": email, "list_id": list_id})
         brevo_client.contacts.remove_contact_from_list(
             list_id=list_id,
-            contacts={"emails": [email]},
+            request=RemoveContactFromListRequestBodyEmails(emails=[email]),
         )
         logger.info("Contact removed from Brevo list", extra={"email": email, "list_id": list_id})
     except Exception as e:
-        logger.error("Failed to remove contact from Brevo list", extra={"email": email, "list_id": list_id, "error": str(e)})
+        if "already removed" in str(e) or "does not exist" in str(e):
+            logger.debug("Contact not in list — skipping remove", extra={"email": email, "list_id": list_id})
+        else:
+            logger.error("Failed to remove contact from Brevo list", extra={"email": email, "list_id": list_id, "error": str(e)})
 
 
 def add_registered_contact(email: str, name: str = ""):
@@ -62,6 +69,10 @@ def add_cancelled_contact(email: str, name: str = ""):
 
 def add_halted_contact(email: str, name: str = ""):
     return add_contact_to_list(email=email, name=name, list_id=LIST_HALTED)
+
+
+def add_trial_contact(email: str, name: str = ""):
+    return add_contact_to_list(email=email, name=name, list_id=LIST_TRIAL)
 
 
 def send_email(to_email: str, to_name: str, subject: str, html_content: str) -> dict:
@@ -124,6 +135,24 @@ def send_vision_board_ready_email(to_email: str, to_name: str = "") -> dict:
         to_name=to_name,
         subject="Your vision board is ready — The Aura",
         html_content=get_vision_board_ready_email_html(name=to_name),
+    )
+
+
+def send_subscription_cancelled_email(to_email: str, to_name: str = "") -> dict:
+    return send_email(
+        to_email=to_email,
+        to_name=to_name,
+        subject="We're sad to see you go — The Aura",
+        html_content=get_subscription_cancelled_email_html(name=to_name),
+    )
+
+
+def send_trial_ended_email(to_email: str, to_name: str = "") -> dict:
+    return send_email(
+        to_email=to_email,
+        to_name=to_name,
+        subject="Your free trial has ended — The Aura",
+        html_content=get_trial_ended_email_html(name=to_name),
     )
 
 

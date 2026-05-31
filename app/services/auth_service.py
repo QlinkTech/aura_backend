@@ -1,5 +1,6 @@
 import time
 from fastapi import HTTPException, status, Depends
+from app.services.brevo.client import send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from jwt import decode, ExpiredSignatureError, InvalidTokenError
@@ -90,9 +91,14 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Lazily revoke access for cancelled-mid-trial users once the trial window passes
-    if user.get("is_paid") and user.get("subscription_status") == "cancelled":
+    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused"):
         if int(time.time()) >= user.get("trial_end_at", 0):
             user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+            try:
+                send_trial_ended_email(to_email=email)
+                remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+            except Exception:
+                pass
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
 
     if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES:

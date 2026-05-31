@@ -28,6 +28,7 @@ SUBSCRIPTION_EVENTS = {
     "subscription.activated",
     "subscription.charged",
     "subscription.completed",
+    "subscription.updated",
     "subscription.cancelled",
     "subscription.halted",
     "subscription.pending",

@@ -21,7 +21,12 @@ _UNPAID_STATUSES = {"created"}
 
 def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = None) -> dict:
     logger.info("Creating subscription", extra={"email": email, "plan_key": plan_key})
-    trial_end_at = _trial_start_at()
+
+    existing = user_profile.find_one({"email": email}, {"trial_end_at": 1})
+    already_trialled = bool(existing and existing.get("trial_end_at"))
+
+    trial_end_at = None if already_trialled else _trial_start_at()
+
     subscription = create_subscription(
         plan_key=plan_key,
         notify_email=email,
@@ -30,17 +35,19 @@ def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = N
     )
     sub_id = subscription.get("id")
     payment_link = subscription.get("short_url", "")
-    user_profile.update_one(
-        {"email": email},
-        {"$set": {
-            "early_bird_sub_id": sub_id,
-            "early_bird_plan_key": plan_key,
-            "early_bird_payment_link": payment_link,
-            "trial_end_at": trial_end_at,
-            "updated_at": int(time.time()),
-        }}
-    )
-    logger.info("Subscription created and stored", extra={"email": email, "sub_id": sub_id, "plan_key": plan_key})
+
+    update_fields = {
+        "early_bird_sub_id": sub_id,
+        "early_bird_plan_key": plan_key,
+        "early_bird_payment_link": payment_link,
+        "updated_at": int(time.time()),
+    }
+    if trial_end_at:
+        update_fields["trial_end_at"] = trial_end_at
+
+    user_profile.update_one({"email": email}, {"$set": update_fields})
+    logger.info("Subscription created and stored",
+                extra={"email": email, "sub_id": sub_id, "plan_key": plan_key, "trial": not already_trialled})
     return {"subscription_id": sub_id, "payment_link": payment_link}
 
 
