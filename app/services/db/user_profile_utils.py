@@ -3,7 +3,7 @@ import secrets
 from fastapi import HTTPException, status
 from app.services.db.mongo_utils import user_profile, password_reset_tokens
 from app.services.auth_service import hash_password, verify_password, create_access_token
-from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact
+from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact, send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
 from app.utils.env_load import frontend_url
 from app.utils.logger_config import logger
 
@@ -80,6 +80,16 @@ def login(email: str, password: str):
         if not user or not user.get("password") or not verify_password(password, user["password"]):
             logger.warning("Login failed - invalid credentials or create your account.", extra={"email": email})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+        if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+            if int(time.time()) >= user.get("trial_end_at", 0):
+                user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+                logger.info("Trial/free plan expired at login — access revoked", extra={"email": email})
+                try:
+                    send_trial_ended_email(to_email=email)
+                    remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                except Exception as e:
+                    logger.error("Failed to send trial ended email at login", extra={"email": email, "error": str(e)})
 
         token = create_access_token({"sub": email, "email": email})
         logger.info("Login successful", extra={"email": email})
