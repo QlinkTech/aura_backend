@@ -5,7 +5,6 @@ from app.services.payment_gateway.client import create_subscription, cancel_subs
 from app.utils.logger_config import logger
 
 FREE_PLAN_DURATION_DAYS = 30
-SUBSCRIPTION_TRIAL_DAYS = 5
 
 # Subscription is active/paid — do not allow new subscription
 _PAID_STATUSES = {"active", "pending", "halted", "completed", "authenticated"}
@@ -15,13 +14,11 @@ _UNPAID_STATUSES = {"created"}
 def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = None) -> dict:
     logger.info("Creating subscription", extra={"email": email, "plan_key": plan_key})
 
-    trial_end_at = int(time.time()) + SUBSCRIPTION_TRIAL_DAYS * 24 * 60 * 60
-
     subscription = create_subscription(
         plan_key=plan_key,
         notify_email=email,
         expire_by=expire_by,
-        start_at=trial_end_at,
+        start_at=None,
     )
     sub_id = subscription.get("id")
     payment_link = subscription.get("short_url", "")
@@ -32,11 +29,10 @@ def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = N
             "early_bird_sub_id": sub_id,
             "early_bird_plan_key": plan_key,
             "early_bird_payment_link": payment_link,
-            "trial_end_at": trial_end_at,
             "updated_at": int(time.time()),
         }}
     )
-    logger.info("Subscription created and stored", extra={"email": email, "sub_id": sub_id, "plan_key": plan_key, "trial_end_at": trial_end_at})
+    logger.info("Subscription created and stored", extra={"email": email, "sub_id": sub_id, "plan_key": plan_key})
     return {"subscription_id": sub_id, "payment_link": payment_link}
 
 
