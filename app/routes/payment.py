@@ -8,8 +8,8 @@ from app.services.db.razorpay_utils import (
     save_payment_failed,
     save_subscription_event,
 )
-from app.utils.schema import EarlyBirdSubRequest, SubscribeRequest, ManageSubscriptionRequest
-from app.services.payment_gateway.utils import create_early_bird_sub_link, create_sub_link, cancel_user_subscription, pause_user_subscription, get_user_subscription
+from app.utils.schema import EarlyBirdSubRequest, SubscribeRequest, ManageSubscriptionRequest, ActivateFreePlanRequest
+from app.services.payment_gateway.utils import create_early_bird_sub_link, create_sub_link, cancel_user_subscription, pause_user_subscription, get_user_subscription, activate_free_plan
 from app.utils.logger_config import logger
 
 _api_key_header = APIKeyHeader(name="X-API-Key")
@@ -79,6 +79,11 @@ async def cancel_subscription_route(request: ManageSubscriptionRequest):
 @payment_router.post("/pause-subscription", dependencies=[Security(_verify_api_key)])
 async def pause_subscription_route(request: ManageSubscriptionRequest):
     return pause_user_subscription(email=request.email)
+
+
+@payment_router.post("/activate-free-plan", dependencies=[Security(_verify_api_key)])
+async def activate_free_plan_route(request: ActivateFreePlanRequest):
+    return activate_free_plan(email=request.email)
 
 
 @payment_router.post("/webhook")

@@ -62,6 +62,9 @@ class EFTChatModel(BaseModel):
 class GuidedVizModel(BaseModel):
     message: str
 
+class ActivateFreePlanRequest(BaseModel):
+    email: str
+
 class SendNotificationModel(BaseModel):
     target: str          # "all" or a specific email
     type: str            # e.g. "new_masterclass", "system_announcement"

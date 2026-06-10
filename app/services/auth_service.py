@@ -90,8 +90,8 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Lazily revoke access for cancelled-mid-trial users once the trial window passes
-    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused"):
+    # Lazily revoke access for cancelled-mid-trial and free-plan users once their window passes
+    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
         if int(time.time()) >= user.get("trial_end_at", 0):
             user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
             try:

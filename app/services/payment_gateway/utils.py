@@ -1,18 +1,10 @@
 import time
-from datetime import datetime, timezone
-from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from app.services.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, pause_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
-EARLY_BIRD_TRIAL_WEEKS = 2
-
-
-def _trial_start_at() -> int:
-    """Returns Unix timestamp 2 weeks from now (start of billing after trial)."""
-    future = datetime.now(timezone.utc) + relativedelta(weeks=EARLY_BIRD_TRIAL_WEEKS)
-    return int(future.timestamp())
+FREE_PLAN_DURATION_DAYS = 30
 
 # Subscription is active/paid — do not allow new subscription
 _PAID_STATUSES = {"active", "pending", "halted", "completed", "authenticated"}
@@ -22,32 +14,25 @@ _UNPAID_STATUSES = {"created"}
 def _create_and_store_subscription(email: str, plan_key: str, expire_by: int = None) -> dict:
     logger.info("Creating subscription", extra={"email": email, "plan_key": plan_key})
 
-    existing = user_profile.find_one({"email": email}, {"trial_end_at": 1})
-    already_trialled = bool(existing and existing.get("trial_end_at"))
-
-    trial_end_at = None if already_trialled else _trial_start_at()
-
     subscription = create_subscription(
         plan_key=plan_key,
         notify_email=email,
         expire_by=expire_by,
-        start_at=trial_end_at,
+        start_at=None,
     )
     sub_id = subscription.get("id")
     payment_link = subscription.get("short_url", "")
 
-    update_fields = {
-        "early_bird_sub_id": sub_id,
-        "early_bird_plan_key": plan_key,
-        "early_bird_payment_link": payment_link,
-        "updated_at": int(time.time()),
-    }
-    if trial_end_at:
-        update_fields["trial_end_at"] = trial_end_at
-
-    user_profile.update_one({"email": email}, {"$set": update_fields})
-    logger.info("Subscription created and stored",
-                extra={"email": email, "sub_id": sub_id, "plan_key": plan_key, "trial": not already_trialled})
+    user_profile.update_one(
+        {"email": email},
+        {"$set": {
+            "early_bird_sub_id": sub_id,
+            "early_bird_plan_key": plan_key,
+            "early_bird_payment_link": payment_link,
+            "updated_at": int(time.time()),
+        }}
+    )
+    logger.info("Subscription created and stored", extra={"email": email, "sub_id": sub_id, "plan_key": plan_key})
     return {"subscription_id": sub_id, "payment_link": payment_link}
 
 
@@ -237,6 +222,48 @@ def cancel_user_subscription(email: str, cancel_at_cycle_end: bool = False) -> d
         raise
     except Exception as e:
         logger.error("Error cancelling subscription", extra={"email": email, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def activate_free_plan(email: str) -> dict:
+    try:
+        email = email.lower()
+        logger.info("Free plan activation request", extra={"email": email})
+        user = user_profile.find_one({"email": email})
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if user.get("subscription_status") == "free":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Free plan has already been activated for this account"
+            )
+
+        # Don't override an already-active paid subscription
+        if user.get("is_paid") and user.get("subscription_status") not in (None, ""):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account already has an active paid subscription"
+            )
+
+        now = int(time.time())
+        trial_end_at = now + FREE_PLAN_DURATION_DAYS * 24 * 60 * 60
+        user_profile.update_one(
+            {"email": email},
+            {"$set": {
+                "is_paid": True,
+                "subscription_status": "free",
+                "trial_end_at": trial_end_at,
+                "updated_at": now,
+            }}
+        )
+        logger.info("Free plan activated", extra={"email": email, "trial_end_at": trial_end_at})
+        return {"message": "Free plan activated successfully", "expires_at": trial_end_at}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error activating free plan", extra={"email": email, "error": str(e)})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
