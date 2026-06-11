@@ -99,8 +99,8 @@ def google_login(id_token: str):
 
         user = user_profile.find_one({"email": email})
         if user:
-            # Lazy expiry check (same as password login)
-            if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+            # Lazy expiry check — skip for bypassed users
+            if not user.get("is_bypassed") and user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
                 if int(time.time()) >= user.get("trial_end_at", 0):
                     user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
                     logger.info("Trial/free plan expired at Google login — access revoked", extra={"email": email})
@@ -203,7 +203,7 @@ def google_code_login(code: str, redirect_uri: str):
 
         user = user_profile.find_one({"email": email})
         if user:
-            if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+            if not user.get("is_bypassed") and user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
                 if int(time.time()) >= user.get("trial_end_at", 0):
                     user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
                     logger.info("Trial/free plan expired at Google code login — access revoked", extra={"email": email})
@@ -263,7 +263,7 @@ def login(email: str, password: str):
             logger.warning("Login failed - invalid credentials or create your account.", extra={"email": email})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-        if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+        if not user.get("is_bypassed") and user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
             if int(time.time()) >= user.get("trial_end_at", 0):
                 user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
                 logger.info("Trial/free plan expired at login — access revoked", extra={"email": email})

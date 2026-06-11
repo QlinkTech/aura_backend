@@ -86,9 +86,12 @@ def get_system_user(token: str = Depends(oauth2_scheme)):
 
 def get_active_user(current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
-    user = user_profile.find_one({"email": email}, {"is_paid": 1, "subscription_status": 1, "trial_end_at": 1})
+    user = user_profile.find_one({"email": email}, {"is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.get("is_bypassed"):
+        return current_user
 
     # Lazily revoke access for cancelled-mid-trial and free-plan users once their window passes
     if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):

@@ -10,13 +10,16 @@ users_router = APIRouter()
 EXCLUDED_FIELDS = {"password": 0}
 LIST_FIELDS = {
     "_id": 0, "email": 1, "username": 1, "phone": 1,
-    "is_paid": 1, "early_bird_plan_key": 1, "early_bird_sub_id": 1,
+    "is_paid": 1, "is_bypassed": 1, "early_bird_plan_key": 1, "early_bird_sub_id": 1,
     "subscription_status": 1, "trial_end_at": 1, "created_at": 1, "updated_at": 1,
 }
 
 _ACTIVE_PAYMENT_STATUSES = {"active", "authenticated", "charged"}
 
 def _resolve_payment_status(doc: dict) -> str:
+    if doc.get("is_bypassed"):
+        return "bypassed"
+
     is_paid = doc.get("is_paid", False)
     sub_status = doc.get("subscription_status")
     has_sub = bool(doc.get("early_bird_sub_id"))
@@ -26,7 +29,7 @@ def _resolve_payment_status(doc: dict) -> str:
             trial_end_at = doc.get("trial_end_at", 0)
             if trial_end_at and int(time.time()) < trial_end_at:
                 return "trial_active"
-        return "active" if sub_status in _ACTIVE_PAYMENT_STATUSES else "granted_access"
+        return "active" if sub_status in _ACTIVE_PAYMENT_STATUSES else "free_trail"
     if sub_status:
         return sub_status
     if has_sub:
@@ -72,7 +75,8 @@ def list_users(
                 "phone": doc.get("phone", ""),
                 "is_paid": doc.get("is_paid", False),
                 "payment_status": _resolve_payment_status(doc),
-                "plan": doc.get("early_bird_plan_key") if doc.get("is_paid") else None,
+                "plan": doc.get("early_bird_plan_key") if doc.get("is_paid") else ("bypassed" if doc.get("is_bypassed") else "free"),
+                "is_bypassed": doc.get("is_bypassed", False),
                 "trial_end_at": doc.get("trial_end_at"),
                 "last_active": doc.get("updated_at"),
                 "created_at": doc.get("created_at"),
@@ -117,34 +121,35 @@ def get_user(email: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-ACTIVE_SUBSCRIPTION_STATUSES = {"active", "authenticated"}
-
 @users_router.post("/users/{email}/bypass-payment")
 def bypass_user_payment(email: str):
-    """Toggle a user's paid status. Cannot revoke if they have an active subscription."""
+    """Toggle bypass access for a user. Not applicable if the user already has a real paid subscription."""
     try:
         email = email.lower()
-        user = user_profile.find_one({"email": email}, {"_id": 1, "is_paid": 1, "subscription_status": 1})
+        user = user_profile.find_one({"email": email}, {"_id": 1, "is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1})
         if not user:
             return JSONResponse({"error": "User not found"}, status_code=404)
 
-        current_status = user.get("is_paid", False)
-        new_status = not current_status
+        if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+            if int(time.time()) >= user.get("trial_end_at", 0):
+                user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+                user["is_paid"] = False
 
-        if not new_status and user.get("subscription_status") in ACTIVE_SUBSCRIPTION_STATUSES:
+        if user.get("is_paid"):
             return JSONResponse(
-                {"error": "Cannot revoke payment — user has an active subscription. Cancel the subscription on Razorpay first."},
-                status_code=400
+                {"error": "User already has an active paid subscription — bypass is not applicable."},
+                status_code=400,
             )
 
+        new_bypassed = not user.get("is_bypassed", False)
         user_profile.update_one(
             {"email": email},
-            {"$set": {"is_paid": new_status, "updated_at": int(time.time())}}
+            {"$set": {"is_bypassed": new_bypassed, "updated_at": int(time.time())}},
         )
 
-        logger.info("System: payment status toggled", extra={"email": email, "is_paid": new_status})
-        return {"success": True, "is_paid": new_status}
+        logger.info("System: bypass toggled", extra={"email": email, "is_bypassed": new_bypassed})
+        return {"success": True, "is_bypassed": new_bypassed}
 
     except Exception as e:
-        logger.error("System: error toggling payment", extra={"email": email, "error": str(e)})
+        logger.error("System: error toggling bypass", extra={"email": email, "error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)
