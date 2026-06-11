@@ -64,6 +64,7 @@ def _elevenlabs_tts(text: str) -> bytes:
         text=text,
         model_id="eleven_multilingual_v2",
         output_format="mp3_44100_128",
+        language_code="en-IN",
     )
     return b"".join(audio_chunks)
 
