@@ -240,11 +240,12 @@ def activate_free_plan(email: str) -> dict:
                 detail="Free plan has already been activated for this account"
             )
 
-        # Don't override an already-active paid subscription
-        if user.get("is_paid") and user.get("subscription_status") not in (None, ""):
+        # Block anyone who has ever had an active/paid subscription (cancelled, halted, completed, etc.)
+        # Allow if sub was created but never paid (status: "created")
+        if user.get("early_bird_sub_id") and user.get("subscription_status") not in (None, "", "created"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account already has an active paid subscription"
+                detail="Free plan is only available for new accounts with no prior subscription"
             )
 
         now = int(time.time())
