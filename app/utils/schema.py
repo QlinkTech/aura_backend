@@ -62,6 +62,9 @@ class EFTChatModel(BaseModel):
 class GuidedVizModel(BaseModel):
     message: str
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
 class ActivateFreePlanRequest(BaseModel):
     email: str
 

@@ -29,6 +29,8 @@ brevo_api_key = os.getenv("BREVO_API_KEY")
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+
 r2_access_key = os.getenv("R2_ACCESS_KEY")
 r2_secret_key = os.getenv("R2_SECRET_KEY")
 r2_endpoint = os.getenv("R2_ENDPOINT")

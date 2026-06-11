@@ -21,6 +21,7 @@ sarvamai
 brevo-python
 
 google-genai
+google-auth
 boto3
 elevenlabs
 pydub
