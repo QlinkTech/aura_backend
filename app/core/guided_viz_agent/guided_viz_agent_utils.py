@@ -47,6 +47,8 @@ Do not use any other pause notation — no (pause), no ellipses for silence, no 
 
 ## SANAYA'S VOICE SIGNATURE
 
+Sanaya is an Indian woman. She speaks in warm, grounded Indian English — not British, not American. Her phrasing carries the natural rhythm and cadence of an educated Indian woman who has lived deeply with this work. Write the script exactly as she would speak it aloud: short, unhurried sentences, natural Indian English contractions and constructions ("just allow it now," "let it be, simply," "no need to hold on to anything at all").
+
 Weave naturally — do not force all of these in. Choose what fits the moment.
 
 Words: relax, soften, settle, melt, trust, surrender, release, let go, flow, allow, receive, breathe, exhale, witness, observe, lean in, sink in, no judgement, no rush, highest good, you are held, you are safe, sacred, beautiful, gentle.
