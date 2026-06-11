@@ -1,12 +1,13 @@
 import time
 import secrets
+import requests as http_requests
 from fastapi import HTTPException, status
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 from app.services.db.mongo_utils import user_profile, password_reset_tokens
 from app.services.auth_service import hash_password, verify_password, create_access_token
 from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact, send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
-from app.utils.env_load import frontend_url, google_client_id
+from app.utils.env_load import frontend_url, google_client_id, google_client_secret
 from app.utils.logger_config import logger
 
 RESET_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
@@ -147,6 +148,109 @@ def google_login(id_token: str):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token")
     except Exception as e:
         logger.error("Error during Google login", extra={"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+ALLOWED_REDIRECT_URIS = {
+    "https://app.regulatewithaura.com/api/auth/callback/google",
+    "http://localhost:3000/api/auth/callback/google",
+}
+
+def google_code_login(code: str, redirect_uri: str):
+    try:
+        if not google_client_id or not google_client_secret:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Google auth not configured")
+
+        if redirect_uri not in ALLOWED_REDIRECT_URIS:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid redirect URI")
+
+        # Exchange authorization code for tokens
+        token_response = http_requests.post(GOOGLE_TOKEN_URL, data={
+            "code": code,
+            "client_id": google_client_id,
+            "client_secret": google_client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        })
+
+        if not token_response.ok:
+            logger.warning("Google token exchange failed", extra={"status": token_response.status_code, "body": token_response.text})
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to exchange Google authorization code")
+
+        token_data = token_response.json()
+        raw_id_token = token_data.get("id_token")
+        if not raw_id_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No ID token returned from Google")
+
+        # Verify the ID token
+        idinfo = google_id_token.verify_oauth2_token(
+            raw_id_token,
+            google_requests.Request(),
+            google_client_id,
+        )
+
+        email = idinfo.get("email", "").lower()
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google token missing email")
+
+        first_name = idinfo.get("given_name", "")
+        last_name = idinfo.get("family_name", "")
+        full_name = f"{first_name} {last_name}".strip() or email.split("@")[0]
+        picture = idinfo.get("picture", "")
+
+        logger.info("Google code login attempt", extra={"email": email})
+
+        user = user_profile.find_one({"email": email})
+        if user:
+            if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
+                if int(time.time()) >= user.get("trial_end_at", 0):
+                    user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+                    logger.info("Trial/free plan expired at Google code login — access revoked", extra={"email": email})
+                    try:
+                        send_trial_ended_email(to_email=email)
+                        remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                    except Exception as e:
+                        logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
+            logger.info("Existing user logged in via Google code flow", extra={"email": email})
+        else:
+            user_profile.insert_one({
+                "email": email,
+                "username": full_name,
+                "phone": "",
+                "password": None,
+                "chat_history": [],
+                "vision_board_url": "",
+                "profile_picture": picture,
+                "is_paid": False,
+                "is_logged_in": True,
+                "auth_provider": "google",
+                "created_at": int(time.time()),
+                "updated_at": int(time.time()),
+            })
+            logger.info("New user created via Google code flow", extra={"email": email})
+            try:
+                send_account_created_email(to_email=email, to_name=full_name)
+                add_registered_contact(email=email, name=full_name)
+            except Exception as e:
+                logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
+
+        token = create_access_token({"sub": email, "email": email})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "email": email,
+            "name": full_name,
+            "picture": picture,
+            "is_new_user": user is None,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.warning("Invalid Google ID token in code flow", extra={"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token")
+    except Exception as e:
+        logger.error("Error during Google code login", extra={"error": str(e)})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

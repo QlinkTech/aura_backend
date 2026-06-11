@@ -65,6 +65,10 @@ class GuidedVizModel(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
 
+class GoogleCodeAuthRequest(BaseModel):
+    code: str
+    redirect_uri: str
+
 class ActivateFreePlanRequest(BaseModel):
     email: str
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, RequestResetPasswordRequest, ResetPasswordRequest, GoogleAuthRequest
-from app.services.db.user_profile_utils import create_account, login, google_login, check_user_exists, request_password_reset, reset_password
+from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, RequestResetPasswordRequest, ResetPasswordRequest, GoogleAuthRequest, GoogleCodeAuthRequest
+from app.services.db.user_profile_utils import create_account, login, google_login, google_code_login, check_user_exists, request_password_reset, reset_password
 from app.utils.logger_config import logger
 
 auth_router = APIRouter()
@@ -18,6 +18,10 @@ def login_user(payload: LoginRequest):
 @auth_router.post("/google")
 def google_auth(payload: GoogleAuthRequest):
     return google_login(payload.id_token)
+
+@auth_router.post("/google/code")
+def google_code_auth(payload: GoogleCodeAuthRequest):
+    return google_code_login(payload.code, payload.redirect_uri)
 
 @auth_router.post("/check-user")
 def check_user(payload: CheckUserRequest):
