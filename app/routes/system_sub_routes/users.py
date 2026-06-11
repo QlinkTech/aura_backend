@@ -18,7 +18,7 @@ _ACTIVE_PAYMENT_STATUSES = {"active", "authenticated", "charged"}
 
 def _resolve_payment_status(doc: dict) -> str:
     if doc.get("is_bypassed"):
-        return "bypassed"
+        return "granted_access"
 
     is_paid = doc.get("is_paid", False)
     sub_status = doc.get("subscription_status")
