@@ -3,7 +3,7 @@ import os
 import tempfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.services.auth_service import get_active_user
-from app.services.voice_service.sarvam_utils import transcribe_audio
+from app.services.voice_service.elevenlabs_stt import transcribe_audio
 from app.utils.logger_config import logger
 
 voice_router = APIRouter()
