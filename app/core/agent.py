@@ -250,6 +250,7 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         ]
 
         reply = None
+        kb_references = []
         for iteration in range(MAX_TOOL_ITERATIONS):
             response = openai_client.chat.completions.create(
                 model="gpt-4.1-mini",
@@ -272,8 +273,10 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
             logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
 
             if func_name == "search_knowledge_base":
-                kb_result = get_kb_context(func_args["query"], k=3)
-                tool_result_content = json.dumps({"knowledge_base": kb_result})
+                kb_chunks = get_kb_context(func_args["query"], k=3)
+                if kb_chunks:
+                    kb_references.extend([c for c in kb_chunks.split("\n") if c.strip()])
+                tool_result_content = json.dumps({"knowledge_base": kb_chunks})
             elif func_name == "get_memory":
                 tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
             elif func_name == "update_memory":
@@ -304,7 +307,13 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
             reply = "I'm here with you. Could you share a little more about what you mean?"
 
         add_session_message(session_id=session_id, email=email, role="user", content=message)
-        add_session_message(session_id=session_id, email=email, role="assistant", content=reply)
+        add_session_message(
+            session_id=session_id,
+            email=email,
+            role="assistant",
+            content=reply,
+            kb_references=kb_references or None,
+        )
 
         if len(history) == 2:
             _title_executor.submit(_generate_and_set_title, session_id=session_id, email=email, user_message=message, assistant_reply=reply)
