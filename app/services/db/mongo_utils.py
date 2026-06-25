@@ -15,6 +15,7 @@ chat_sessions = db["chat_sessions"]
 masterclass = db["masterclass"]
 guided_viz_sessions = db["guided_viz_sessions"]
 notifications = db["notifications"]
+activity_log = db["activity_log"]
 
 
 def return_system_prompt():

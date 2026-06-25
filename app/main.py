@@ -9,12 +9,15 @@ from app.routes.user import user_router
 from app.routes.systems import system_router
 from app.routes.payment import payment_router
 from app.services.event_bus import set_loop
+from app.services.segmentation.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     set_loop(asyncio.get_event_loop())
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(

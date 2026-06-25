@@ -12,6 +12,7 @@ LIST_FIELDS = {
     "_id": 0, "email": 1, "username": 1, "phone": 1,
     "is_paid": 1, "is_bypassed": 1, "early_bird_plan_key": 1, "early_bird_sub_id": 1,
     "subscription_status": 1, "trial_end_at": 1, "created_at": 1, "updated_at": 1,
+    "engagement_tier": 1, "trial_engagement_tier": 1, "engagement_status": 1,
 }
 
 _ACTIVE_PAYMENT_STATUSES = {"active", "authenticated", "charged"}
@@ -43,6 +44,7 @@ def list_users(
     limit: int = Query(20, ge=1, le=100),
     is_paid: Optional[bool] = Query(None),
     search: Optional[str] = Query(None, description="Search by email or username"),
+    engagement_status: Optional[str] = Query(None, description="Filter by engagement status: cold, warm, hot, converted, no_trial"),
 ):
     """List all users with pagination, sorted by most recently active."""
     try:
@@ -50,6 +52,9 @@ def list_users(
 
         if is_paid is not None:
             query["is_paid"] = is_paid
+
+        if engagement_status is not None:
+            query["engagement_status"] = engagement_status
 
         if search:
             query["$or"] = [
@@ -80,6 +85,9 @@ def list_users(
                 "trial_end_at": doc.get("trial_end_at"),
                 "last_active": doc.get("updated_at"),
                 "created_at": doc.get("created_at"),
+                "engagement_tier": doc.get("engagement_tier"),
+                "trial_engagement_tier": doc.get("trial_engagement_tier"),
+                "engagement_status": doc.get("engagement_status"),
             })
 
         return {

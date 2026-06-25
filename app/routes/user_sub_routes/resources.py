@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from bson import ObjectId
 from app.services.auth_service import get_current_user
 from app.services.db.mongo_utils import resources
+from app.services.db.activity_log_utils import log_activity
 from app.utils.logger_config import logger
 
 user_resources_router = APIRouter()
@@ -18,9 +19,10 @@ def list_resources(
     category: str = Query(None, description="Filter by category, omit for all"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    _: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
+        log_activity(current_user["email"], "resource_view")
         query = {} if not category or category.lower() == "all" else {"category": category}
         skip = (page - 1) * limit
         total = resources.count_documents(query)
@@ -40,6 +42,7 @@ def list_resources(
 @user_resources_router.get("/resources/{resource_id}")
 def get_resource(resource_id: str, current_user=Depends(get_current_user)):
     try:
+        log_activity(current_user["email"], "resource_view", ref_id=resource_id)
         doc = resources.find_one({"_id": ObjectId(resource_id)}, {"r2_key": 0})
         if not doc:
             return JSONResponse({"error": "Resource not found"}, status_code=404)

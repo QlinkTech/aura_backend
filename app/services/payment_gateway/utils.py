@@ -255,6 +255,7 @@ def activate_free_plan(email: str) -> dict:
             {"$set": {
                 "is_paid": True,
                 "subscription_status": "free",
+                "trial_start_at": now,
                 "trial_end_at": trial_end_at,
                 "updated_at": now,
             }}
