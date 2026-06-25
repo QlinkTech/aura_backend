@@ -43,8 +43,10 @@ def list_users(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     is_paid: Optional[bool] = Query(None),
+    is_bypassed: Optional[bool] = Query(None, description="Filter by granted access (bypass) status"),
     search: Optional[str] = Query(None, description="Search by email or username"),
     engagement_status: Optional[str] = Query(None, description="Filter by engagement status: cold, warm, hot, converted, no_trial"),
+    payment_status: Optional[str] = Query(None, description="Filter by resolved payment status: granted_access, trial_active, active, free_trail, payment_pending, not_initiated (or a raw subscription_status value)"),
 ):
     """List all users with pagination, sorted by most recently active."""
     try:
@@ -52,6 +54,9 @@ def list_users(
 
         if is_paid is not None:
             query["is_paid"] = is_paid
+
+        if is_bypassed is not None:
+            query["is_bypassed"] = is_bypassed
 
         if engagement_status is not None:
             query["engagement_status"] = engagement_status
@@ -63,17 +68,27 @@ def list_users(
             ]
 
         skip = (page - 1) * limit
-        total = user_profile.count_documents(query)
 
-        cursor = (
-            user_profile.find(query, LIST_FIELDS)
-            .sort("updated_at", -1)
-            .skip(skip)
-            .limit(limit)
-        )
+        if payment_status is not None:
+            # payment_status is derived (not a stored field), so it can't be matched in Mongo directly.
+            # Resolve it per-doc against the full filtered set, then paginate in Python.
+            matched_docs = [
+                doc for doc in user_profile.find(query, LIST_FIELDS).sort("updated_at", -1)
+                if _resolve_payment_status(doc) == payment_status
+            ]
+            total = len(matched_docs)
+            page_docs = matched_docs[skip: skip + limit]
+        else:
+            total = user_profile.count_documents(query)
+            page_docs = list(
+                user_profile.find(query, LIST_FIELDS)
+                .sort("updated_at", -1)
+                .skip(skip)
+                .limit(limit)
+            )
 
         users = []
-        for doc in cursor:
+        for doc in page_docs:
             users.append({
                 "email": doc.get("email", ""),
                 "username": doc.get("username", ""),
