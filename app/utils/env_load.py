@@ -37,3 +37,7 @@ r2_secret_key = os.getenv("R2_SECRET_KEY")
 r2_endpoint = os.getenv("R2_ENDPOINT")
 r2_bucket = os.getenv("R2_BUCKET")
 r2_public_url = os.getenv("R2_PUBLIC_URL")
+
+gupshup_app_id = os.getenv("GUPSHUP_APP_ID")
+gupshup_token = os.getenv("GUPSHUP_TOKEN")
+gupshup_app_name = os.getenv("GUPSHUP_APP_NAME")

@@ -67,7 +67,7 @@ def create_account(email: str, password: str, user_name: str, phone: str = ""):
         except Exception as e:
             logger.error("Failed to add contact to registered list", extra={"email": email, "error": str(e)})
 
-        return {"message": "Account created successfully", "access_token": token, "token_type": "bearer"}
+        return {"message": "Account created successfully", "access_token": token, "token_type": "bearer", "phone_verified": False}
     except HTTPException:
         raise
     except Exception as e:
@@ -140,6 +140,7 @@ def google_login(id_token: str):
             "name": full_name,
             "picture": picture,
             "is_new_user": user is None,
+            "phone_verified": bool(user.get("phone_verified", False)) if user else False,
         }
     except HTTPException:
         raise
@@ -243,6 +244,7 @@ def google_code_login(code: str, redirect_uri: str):
             "name": full_name,
             "picture": picture,
             "is_new_user": user is None,
+            "phone_verified": bool(user.get("phone_verified", False)) if user else False,
         }
     except HTTPException:
         raise
@@ -275,7 +277,7 @@ def login(email: str, password: str):
 
         token = create_access_token({"sub": email, "email": email})
         logger.info("Login successful", extra={"email": email})
-        return {"access_token": token, "token_type": "bearer"}
+        return {"access_token": token, "token_type": "bearer", "phone_verified": bool(user.get("phone_verified", False))}
     except HTTPException:
         raise
     except Exception as e:

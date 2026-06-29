@@ -72,6 +72,13 @@ class GoogleCodeAuthRequest(BaseModel):
 class ActivateFreePlanRequest(BaseModel):
     email: str
 
+class SendPhoneOtpRequest(BaseModel):
+    phone: str
+
+class VerifyPhoneOtpRequest(BaseModel):
+    phone: str
+    otp: str
+
 class SendNotificationModel(BaseModel):
     target: str          # "all" or a specific email
     type: str            # e.g. "new_masterclass", "system_announcement"

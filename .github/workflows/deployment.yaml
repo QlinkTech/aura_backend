@@ -86,6 +86,9 @@ jobs:
             -e R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }} \
             -e GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
             -e GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} \
+            -e GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }} \
+            -e GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }} \
+            -e GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }} \
             syd.vultrcr.com/qlink01/aura_serve:latest
 
       - name: Cleanup Old Images

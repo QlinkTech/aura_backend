@@ -1,6 +1,8 @@
-from fastapi import APIRouter
-from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, RequestResetPasswordRequest, ResetPasswordRequest, GoogleAuthRequest, GoogleCodeAuthRequest
+from fastapi import APIRouter, Depends
+from app.utils.schema import RegisterRequest, LoginRequest, CheckUserRequest, RequestResetPasswordRequest, ResetPasswordRequest, GoogleAuthRequest, GoogleCodeAuthRequest, SendPhoneOtpRequest, VerifyPhoneOtpRequest
 from app.services.db.user_profile_utils import create_account, login, google_login, google_code_login, check_user_exists, request_password_reset, reset_password
+from app.services.db.phone_otp_utils import send_phone_otp, verify_phone_otp
+from app.services.auth_service import get_current_user
 from app.utils.logger_config import logger
 
 auth_router = APIRouter()
@@ -37,3 +39,15 @@ def request_reset(payload: RequestResetPasswordRequest):
 def reset_user_password(payload: ResetPasswordRequest):
     logger.info("Reset password attempt")
     return reset_password(payload.token, payload.new_password)
+
+@auth_router.post("/phone/send-otp")
+def send_phone_otp_route(payload: SendPhoneOtpRequest, current_user=Depends(get_current_user)):
+    email = current_user["email"]
+    logger.info("Send phone OTP request", extra={"email": email})
+    return send_phone_otp(email=email, phone=payload.phone)
+
+@auth_router.post("/phone/verify-otp")
+def verify_phone_otp_route(payload: VerifyPhoneOtpRequest, current_user=Depends(get_current_user)):
+    email = current_user["email"]
+    logger.info("Verify phone OTP request", extra={"email": email})
+    return verify_phone_otp(email=email, phone=payload.phone, otp=payload.otp)

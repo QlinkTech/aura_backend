@@ -16,6 +16,7 @@ masterclass = db["masterclass"]
 guided_viz_sessions = db["guided_viz_sessions"]
 notifications = db["notifications"]
 activity_log = db["activity_log"]
+phone_otps = db["phone_otps"]
 
 
 def return_system_prompt():

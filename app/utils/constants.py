@@ -1,6 +1,6 @@
 # ruff:noqa:E501
 OPENAI_MODEL = "gpt-4o-mini"
-GUPSHUP_SOURCE = "918828145407"
+GUPSHUP_SOURCE = "918369767889"
 GUPSHUP_URL = "https://api.gupshup.io/wa/api/v1/msg"
 EMBEDDING_MODEL = "text-embedding-3-small"
 SKIP_FIELDS_LOGGER = (
