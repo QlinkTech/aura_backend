@@ -25,7 +25,7 @@ elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 BREAK_TAG_RE = re.compile(r'<break\s+time="(\d+(?:\.\d+)?)s"\s*/>')
 MAX_TOOL_ITERATIONS = 3
 MUSIC_VOLUME_DB = -14
-GUIDED_VIZ_VOICE_ID = "hnMOqbQV1aV5iom08kJd"
+GUIDED_VIZ_VOICE_ID = "HJscYsobBBrJcoBI43WZ"
 
 ASSETS_DIR = Path(__file__).parent.parent.parent / "assets"
 
