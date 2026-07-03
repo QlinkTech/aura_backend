@@ -55,8 +55,10 @@ def list_users(
         if is_paid is not None:
             query["is_paid"] = is_paid
 
-        if is_bypassed is not None:
-            query["is_bypassed"] = is_bypassed
+        if is_bypassed is True:
+            query["is_bypassed"] = True
+        elif is_bypassed is False:
+            query["is_bypassed"] = {"$ne": True}
 
         if engagement_status is not None:
             query["engagement_status"] = engagement_status
