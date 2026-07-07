@@ -11,6 +11,7 @@ from pydub import AudioSegment
 from app.core.guided_viz_agent.guided_viz_agent_utils import (
     GUIDED_VIZ_SYSTEM_PROMPT,
     GUIDED_VIZ_TOOLS,
+    TRANSLITERATION_SYSTEM_PROMPT,
 )
 from app.services.db.guided_viz_utils import mark_session_complete, mark_session_error
 from app.services.storage.r2_utils import upload_media
@@ -58,6 +59,42 @@ def _parse_segments(script: str) -> list[tuple[str, object]]:
     return segments
 
 
+def _transliterate_to_devanagari(texts: list[str]) -> list[str]:
+    """Transliterate English script segments into Devanagari script (phonetic, not translated)
+    so the Hindi TTS voice pronounces the English words with a natural Indian accent.
+
+    Break tags are already stripped by the caller, so only spoken text is sent here.
+    On any failure or mismatch the original English text is returned unchanged.
+    """
+    if not texts:
+        return texts
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": TRANSLITERATION_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps({"segments": texts}, ensure_ascii=False)},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0,
+        )
+        data = json.loads(response.choices[0].message.content)
+        result = data.get("segments")
+
+        if isinstance(result, list) and len(result) == len(texts):
+            return [str(seg) for seg in result]
+
+        logger.warning(
+            "Transliteration returned mismatched segments; using original English",
+            extra={"expected": len(texts), "got": len(result) if isinstance(result, list) else None},
+        )
+    except Exception as e:
+        logger.error("Transliteration failed; using original English", extra={"error": str(e)})
+
+    return texts
+
+
 def _elevenlabs_tts(text: str) -> bytes:
     audio_chunks = elevenlabs_client.text_to_speech.convert(
         voice_id=GUIDED_VIZ_VOICE_ID,
@@ -72,6 +109,12 @@ def _build_voice_audio(script: str) -> tuple[bytes, int]:
     """Generate TTS per segment, insert silence for pauses. Returns (MP3 bytes, char_count)."""
     segments = _parse_segments(script)
     text_segments = [(i, seg) for i, (t, seg) in enumerate(segments) if t == "text"]
+
+    # Transliterate the spoken English into Devanagari script so the TTS voice reads it
+    # with a natural Indian accent. Pause/break segments are excluded here by construction.
+    transliterated = _transliterate_to_devanagari([text for _, text in text_segments])
+    text_segments = [(idx, transliterated[n]) for n, (idx, _) in enumerate(text_segments)]
+
     tts_char_count = sum(len(text) for _, text in text_segments)
 
     tts_results: dict[int, bytes] = {}
@@ -123,7 +166,7 @@ def _generate_and_store_audio(
 
     voice_bytes, tts_chars = _build_voice_audio(script)
 
-    logger.info("Mixing voice with local music", extra={"email": email, "mood": music_mood})
+    logger.info("Mixing voice with local music", extra={"email": email, "session_id": session_id, "mood": music_mood})
     final_bytes = _mix_voice_and_music(voice_bytes, music_mood)
 
     key = f"guided_viz_audio/{email}/{session_id}.mp3"
@@ -208,14 +251,14 @@ def generate_guided_viz(email: str, message: str, session_id: str, username: str
             result = response.choices[0]
 
             if not result.message.tool_calls:
-                logger.warning("Guided viz agent did not call tool", extra={"email": email, "iteration": iteration})
+                logger.warning("Guided viz agent did not call tool", extra={"email": email, "session_id": session_id, "iteration": iteration})
                 break
 
             tool_call = result.message.tool_calls[0]
             func_name = tool_call.function.name
             func_args = json.loads(tool_call.function.arguments)
 
-            logger.info("Guided viz tool call", extra={"email": email, "tool": func_name})
+            logger.info("Guided viz tool call", extra={"email": email, "session_id": session_id, "tool": func_name})
 
             if func_name == "generate_guided_viz_audio":
                 script     = func_args.get("script", "")
@@ -233,7 +276,7 @@ def generate_guided_viz(email: str, message: str, session_id: str, username: str
                     tts_chars=tts_chars,
                 )
 
-                logger.info("Guided viz cost", extra={"email": email, "cost": generation_cost})
+                logger.info("Guided viz cost", extra={"email": email, "session_id": session_id, "cost": generation_cost})
 
                 mark_session_complete(
                     session_id=session_id,
@@ -252,13 +295,13 @@ def generate_guided_viz(email: str, message: str, session_id: str, username: str
                 })
                 return
             else:
-                logger.warning("Unknown guided viz tool", extra={"email": email, "tool": func_name})
+                logger.warning("Unknown guided viz tool", extra={"email": email, "session_id": session_id, "tool": func_name})
                 break
 
         if not audio_url:
-            logger.error("Guided viz completed without audio", extra={"email": email})
+            logger.error("Guided viz completed without audio", extra={"email": email, "session_id": session_id})
             _fail("Could not generate your visualization. Please try again.", "no audio produced")
 
     except Exception as e:
-        logger.error("[generate_guided_viz] Error", extra={"email": email, "error": str(e)})
+        logger.error("[generate_guided_viz] Error", extra={"email": email, "session_id": session_id, "error": str(e)})
         _fail("Something went wrong. Please try again.", str(e))

@@ -154,6 +154,23 @@ Close with one quiet word. Sanaya's signature close: a soft thank you.
 Call `generate_guided_viz_audio` immediately with the complete script, music_mood, theme, mood, and tags. Do not add any text outside the tool call.
 """
 
+TRANSLITERATION_SYSTEM_PROMPT = (
+    "You are a strict transliteration engine for a Hindi text-to-speech voice.\n"
+    "You receive a JSON object: {\"segments\": [\"...\", \"...\"]} where each string is a piece of an "
+    "English guided-meditation script.\n\n"
+    "For each string, TRANSLITERATE it into Devanagari script. This means: keep the words in English, "
+    "but spell them phonetically in Devanagari so a Hindi TTS voice reads them aloud with a natural "
+    "Indian accent. Do NOT translate the meaning into Hindi — the listener should still hear the English "
+    "words, only pronounced in an Indian voice.\n\n"
+    "Example: \"Take a slow, deep breath\" -> \"टेक अ स्लो, डीप ब्रेथ\".\n\n"
+    "Rules:\n"
+    "- Preserve all punctuation (commas, periods, ellipses …) and spacing exactly as in the source.\n"
+    "- Do NOT add, remove, merge, split, or reorder segments.\n"
+    "- Do NOT add any commentary, translation, or extra text.\n"
+    "- Return a JSON object of the exact same shape: {\"segments\": [...]} with the same number of "
+    "strings in the same order."
+)
+
 GUIDED_VIZ_TOOLS = [
     {
         "type": "function",
