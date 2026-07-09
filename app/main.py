@@ -37,7 +37,8 @@ app.add_middleware(
         "https://sanaya-dashboard.vercel.app",
         "https://app.regulatewithaura.com",
         "https://app.manifestwithaura.com",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -118,20 +118,21 @@ def upload_media(
 def trigger_campaign(payload: TriggerWhatsappCampaignModel, background_tasks: BackgroundTasks):
     """Trigger a template-message campaign to all users or to specific engagement tiers. Sends run in the background."""
     try:
-        logger.info("System: triggering WhatsApp campaign", extra={"name": payload.name, "target": payload.target, "tiers": payload.tiers})
+        logger.info("System: triggering WhatsApp campaign", extra={"campaign_name": payload.name, "target": payload.target, "tiers": payload.tiers, "numbers": len(payload.numbers or [])})
         result = create_campaign(
             name=payload.name,
             template_id=payload.template_id,
             params=payload.params,
             target=payload.target,
             tiers=payload.tiers,
+            numbers=payload.numbers,
         )
         background_tasks.add_task(run_campaign, result["campaign_id"])
         return {"success": True, **result}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("System: error triggering WhatsApp campaign", extra={"name": payload.name, "error": str(e)})
+        logger.error("System: error triggering WhatsApp campaign", extra={"campaign_name": payload.name, "error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)
 
 

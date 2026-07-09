@@ -112,8 +112,9 @@ class TriggerWhatsappCampaignModel(BaseModel):
     name: str
     template_id: str                 # id of an APPROVED template (from Get Templates)
     params: list = []                # values for the template's {{1}}, {{2}}, ... placeholders
-    target: Literal["all", "tiers"] = "all"
+    target: Literal["all", "tiers", "numbers"] = "all"
     tiers: Optional[list] = None     # required when target="tiers": daily/high/medium/low/inactive
+    numbers: Optional[list] = None   # required when target="numbers": manually entered phone numbers (with country code)
 
 class EditWhatsappTemplateModel(BaseModel):
     content: Optional[str] = None

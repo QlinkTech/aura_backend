@@ -1,3 +1,4 @@
+import re
 import time
 from bson import ObjectId
 from fastapi import HTTPException, status
@@ -11,8 +12,36 @@ VALID_TIERS = {"daily", "high", "medium", "low", "inactive"}
 _STATUS_RANK = {"pending": 0, "submitted": 1, "sent": 2, "delivered": 3, "read": 4, "failed": 5}
 
 
-def resolve_recipients(target: str, tiers: list = None) -> list:
-    """Returns [{email, phone}] for users with a phone number, optionally filtered by engagement tier."""
+def _normalize_manual_numbers(numbers: list) -> list:
+    """Strips formatting from manually entered numbers, validates, and dedupes preserving order."""
+    if not numbers:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="numbers must be a non-empty list of phone numbers")
+
+    cleaned, seen, invalid = [], set(), []
+    for raw in numbers:
+        digits = re.sub(r"\D", "", str(raw))
+        if len(digits) < 8 or len(digits) > 15:
+            invalid.append(str(raw))
+        elif digits not in seen:
+            seen.add(digits)
+            cleaned.append(digits)
+
+    if invalid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid phone numbers: {', '.join(invalid)}")
+    return cleaned
+
+
+def resolve_recipients(target: str, tiers: list = None, numbers: list = None) -> list:
+    """Returns [{email, phone}] — users with a phone (optionally tier-filtered), or manually entered numbers."""
+    if target == "numbers":
+        phones = _normalize_manual_numbers(numbers)
+        # attach emails for numbers that belong to known users, so stats stay traceable
+        known = {
+            doc["phone"]: doc["email"]
+            for doc in user_profile.find({"phone": {"$in": phones}}, {"_id": 0, "email": 1, "phone": 1})
+        }
+        return [{"email": known.get(p), "phone": p} for p in phones]
+
     query = {"phone": {"$nin": [None, ""]}}
     if target == "tiers":
         invalid = set(tiers or []) - VALID_TIERS
@@ -29,8 +58,8 @@ def resolve_recipients(target: str, tiers: list = None) -> list:
     ]
 
 
-def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None) -> dict:
-    recipients = resolve_recipients(target, tiers)
+def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None, numbers: list = None) -> dict:
+    recipients = resolve_recipients(target, tiers, numbers)
     if not recipients:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users with a phone number match this audience")
 
@@ -41,6 +70,7 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
         "params": params,
         "target": target,
         "tiers": tiers if target == "tiers" else None,
+        "numbers": [r["phone"] for r in recipients] if target == "numbers" else None,
         "total_recipients": len(recipients),
         "status": "processing",
         "created_at": now,
@@ -61,7 +91,7 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
         for r in recipients
     ])
 
-    logger.info("WhatsApp campaign created", extra={"campaign_id": str(campaign_id), "name": name, "recipients": len(recipients)})
+    logger.info("WhatsApp campaign created", extra={"campaign_id": str(campaign_id), "campaign_name": name, "recipients": len(recipients)})
     return {"campaign_id": str(campaign_id), "total_recipients": len(recipients)}
 
 

@@ -347,8 +347,9 @@ Sends an **approved** template to many users at once. The request returns immedi
 | `name` | ✅ | — | A label for the campaign (shown in listings) |
 | `template_id` | ✅ | — | The Gupshup `id` of an **APPROVED** template (get it from [List Templates](#2-list-templates--get-whatsapptemplates)) |
 | `params` | optional | `[]` | Values that fill the template's variables — see below |
-| `target` | optional | `"all"` | `"all"` = every user with a phone number · `"tiers"` = filter by engagement tier |
+| `target` | optional | `"all"` | `"all"` = every user with a phone number · `"tiers"` = filter by engagement tier · `"numbers"` = manually entered phone numbers |
 | `tiers` | required if `target="tiers"` | — | Any of: `daily`, `high`, `medium`, `low`, `inactive` |
+| `numbers` | required if `target="numbers"` | — | List of phone numbers **with country code**, e.g. `["919876543210", "+91 88888 88888"]` — formatting/spaces/dashes are stripped automatically |
 
 ### How template variables (`params`) work
 
@@ -377,8 +378,9 @@ Rules & tips:
 
 - `"target": "all"` — every user in `user_profile` with a non-empty phone number.
 - `"target": "tiers", "tiers": ["high", "daily"]` — only users whose `engagement_tier` (computed by the segmentation scheduler over their last 30 days of activity) matches. Tiers: `daily` ≥20 active days, `high` 12–19, `medium` 6–11, `low` 1–5, `inactive` 0.
+- `"target": "numbers", "numbers": [...]` — exactly the phone numbers you type in, whether or not they are app users. Numbers must include the country code (e.g. `91...` for India); spaces, dashes, `+` and other formatting are stripped automatically, duplicates are removed, and each number must be 8–15 digits or the whole request is rejected with a `400` listing the bad entries. Numbers that belong to known users get their email attached in the campaign's message records; unknown numbers are sent to anyway, with `email: null`.
 
-### Example
+### Example — engagement tiers
 
 ```bash
 curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
@@ -393,6 +395,21 @@ curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
   }'
 ```
 
+### Example — manual list of numbers
+
+```bash
+curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "VIP preview blast",
+    "template_id": "5da48971-6181-4c45-8de0-c786a93328e7",
+    "params": ["*Monsoon*", "50%", "July 20"],
+    "target": "numbers",
+    "numbers": ["919876543210", "+91 88888 88888", "91-70000-00001"]
+  }'
+```
+
 ### Response
 
 ```json
@@ -400,7 +417,7 @@ curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
 ```
 
 ### Errors
-- `400` — invalid/empty `tiers`, or no users match the audience
+- `400` — invalid/empty `tiers`, invalid/empty `numbers` (bad entries are listed in the error), or no users match the audience
 - `500` — Gupshup env vars not configured
 
 ---
@@ -504,5 +521,3 @@ curl '{{BASE_URL}}/api/system/whatsapp/campaigns/6650f2...' \
 - **Category miscategorization**: since June 2024, Meta may auto-flag/auto-correct a template's category. Check `containerMeta.correctCategory` and `oldCategory` fields in List responses.
 - **Carousel + media**: carousel templates with media cannot be edited after creation (Gupshup limitation).
 - **Rate limit**: Gupshup allows 10 requests/minute on template APIs — expect `429` if the dashboard batches too many calls.
-- **Campaigns only send APPROVED templates**: firing a campaign with a `PENDING`/`REJECTED` template makes every recipient fail — check the template status first.
-- **Webhook is a prerequisite for delivered/read stats**: see [section 8](#8-delivery-event-webhook--post-apiwhatsappwebhook-️-setup-required); without it stats stop at `sent`/`failed`.
