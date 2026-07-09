@@ -13,6 +13,7 @@ from app.routes.system_sub_routes.masterclass import masterclass_router
 from app.routes.system_sub_routes.notifications import notifications_router
 from app.routes.system_sub_routes.chat import system_chat_router
 from app.routes.system_sub_routes.sessions import system_sessions_router
+from app.routes.system_sub_routes.whatsapp import whatsapp_router
 
 system_router = APIRouter()
 
@@ -26,6 +27,7 @@ system_router.include_router(masterclass_router, dependencies=_auth)
 system_router.include_router(notifications_router, dependencies=_auth)
 system_router.include_router(system_chat_router, dependencies=_auth)
 system_router.include_router(system_sessions_router, dependencies=_auth)
+system_router.include_router(whatsapp_router, dependencies=_auth)
 
 
 class LoginData(BaseModel):

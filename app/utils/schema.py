@@ -1,3 +1,4 @@
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 class RegisterRequest(BaseModel):
@@ -85,3 +86,38 @@ class SendNotificationModel(BaseModel):
     title: str
     body: str
     data: dict = {}
+
+class CreateWhatsappTemplateModel(BaseModel):
+    element_name: str
+    category: Literal["AUTHENTICATION", "MARKETING", "UTILITY"]
+    template_type: str = "TEXT"
+    content: str
+    example: str
+    vertical: str = "TEXT"
+    language_code: str = "en_US"
+    header: Optional[str] = None
+    footer: Optional[str] = None
+    example_header: Optional[str] = None
+    example_media: Optional[str] = None
+    buttons: Optional[list] = None
+    enable_sample: bool = True
+    allow_template_category_change: bool = False
+    add_security_recommendation: Optional[bool] = None
+    code_expiration_minutes: Optional[int] = None
+    message_send_ttl_seconds: Optional[int] = None
+    is_cpr: Optional[bool] = None
+    parameter_format: Optional[Literal["NAMED", "POSITIONAL"]] = None
+
+class EditWhatsappTemplateModel(BaseModel):
+    content: Optional[str] = None
+    template_type: Optional[str] = None
+    example: Optional[str] = None
+    example_header: Optional[str] = None
+    enable_sample: Optional[bool] = None
+    header: Optional[str] = None
+    footer: Optional[str] = None
+    buttons: Optional[list] = None
+    example_media: Optional[str] = None
+    media_id: Optional[str] = None
+    media_url: Optional[str] = None
+    category: Optional[Literal["AUTHENTICATION", "MARKETING", "UTILITY"]] = None
