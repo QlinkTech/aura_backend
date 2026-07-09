@@ -8,6 +8,7 @@ from app.routes.auth import auth_router
 from app.routes.user import user_router
 from app.routes.systems import system_router
 from app.routes.payment import payment_router
+from app.routes.whatsapp_webhook import whatsapp_webhook_router
 from app.services.event_bus import set_loop
 from app.services.segmentation.scheduler import start_scheduler, stop_scheduler
 
@@ -52,6 +53,7 @@ app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(user_router, prefix="/api/user", tags=["User"])
 app.include_router(system_router, prefix="/api/system", tags=["Systems"])
 app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
+app.include_router(whatsapp_webhook_router, prefix="/api/whatsapp", tags=["WhatsApp"])
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

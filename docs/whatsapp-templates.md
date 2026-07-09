@@ -1,6 +1,6 @@
-# WhatsApp Template Management API
+# WhatsApp Template & Campaign Management API
 
-Admin-only routes for creating and managing WhatsApp message templates through the Gupshup Partner API. All routes live under `app/routes/system_sub_routes/whatsapp.py` and are mounted at:
+Admin-only routes for creating and managing WhatsApp message templates, and for sending them out as campaigns, through the Gupshup Partner API. All routes live under `app/routes/system_sub_routes/whatsapp.py` and are mounted at:
 
 ```
 /api/system/whatsapp/...
@@ -44,6 +44,10 @@ If the token is missing/expired/invalid you'll get a `401`. If it's valid but no
 | PUT | `/api/system/whatsapp/templates/{template_id}` | Edit an existing template |
 | DELETE | `/api/system/whatsapp/templates/{element_name}` | Permanently delete a template |
 | POST | `/api/system/whatsapp/templates/media` | Upload sample media, get a `handleId` |
+| POST | `/api/system/whatsapp/campaigns` | Trigger a template-message campaign |
+| GET | `/api/system/whatsapp/campaigns` | List campaigns with delivery stats |
+| GET | `/api/system/whatsapp/campaigns/{campaign_id}` | Campaign detail + stats |
+| POST | `/api/whatsapp/webhook` | *(public, no auth)* Gupshup delivery-event callback |
 
 ---
 
@@ -332,6 +336,166 @@ curl -G '{{BASE_URL}}/api/system/whatsapp/templates' \
 
 ---
 
+## 6. Trigger a campaign — `POST /whatsapp/campaigns`
+
+Sends an **approved** template to many users at once. The request returns immediately with a `campaign_id`; the actual sending runs in the background.
+
+### Fields
+
+| Field | Required | Default | Notes |
+|---|---|---|---|
+| `name` | ✅ | — | A label for the campaign (shown in listings) |
+| `template_id` | ✅ | — | The Gupshup `id` of an **APPROVED** template (get it from [List Templates](#2-list-templates--get-whatsapptemplates)) |
+| `params` | optional | `[]` | Values that fill the template's variables — see below |
+| `target` | optional | `"all"` | `"all"` = every user with a phone number · `"tiers"` = filter by engagement tier |
+| `tiers` | required if `target="tiers"` | — | Any of: `daily`, `high`, `medium`, `low`, `inactive` |
+
+### How template variables (`params`) work
+
+If the approved template body is:
+
+```
+Hi! Our {{1}} sale is live — get {{2}} off until {{3}}.
+```
+
+then `params` supplies the values **in order** — `params[0]` fills `{{1}}`, `params[1]` fills `{{2}}`, and so on:
+
+```json
+{ "params": ["Monsoon", "50%", "July 20"] }
+```
+
+Every recipient gets: *"Hi! Our Monsoon sale is live — get 50% off until July 20."*
+
+Rules & tips:
+
+- **Count must match**: send exactly as many params as the template has `{{n}}` placeholders. A mismatch makes Gupshup reject the send (those recipients will show as `failed` in the stats).
+- **WhatsApp formatting works inside params**: wrap a value in asterisks for bold — `"*Monsoon*"` renders as **Monsoon**. Same for `_italics_` and `~strikethrough~`.
+- **Templates with no variables**: just omit `params` or send `[]`.
+- **Params are campaign-wide, not per-user**: every recipient receives the same values. There is currently no per-user personalization (e.g. filling `{{1}}` with each user's name).
+
+### Audience selection
+
+- `"target": "all"` — every user in `user_profile` with a non-empty phone number.
+- `"target": "tiers", "tiers": ["high", "daily"]` — only users whose `engagement_tier` (computed by the segmentation scheduler over their last 30 days of activity) matches. Tiers: `daily` ≥20 active days, `high` 12–19, `medium` 6–11, `low` 1–5, `inactive` 0.
+
+### Example
+
+```bash
+curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "July re-engagement",
+    "template_id": "5da48971-6181-4c45-8de0-c786a93328e7",
+    "params": ["*Monsoon*", "50%", "July 20"],
+    "target": "tiers",
+    "tiers": ["low", "inactive"]
+  }'
+```
+
+### Response
+
+```json
+{ "success": true, "campaign_id": "6650f2...", "total_recipients": 142 }
+```
+
+### Errors
+- `400` — invalid/empty `tiers`, or no users match the audience
+- `500` — Gupshup env vars not configured
+
+---
+
+## 7. Campaign stats — `GET /whatsapp/campaigns` and `GET /whatsapp/campaigns/{campaign_id}`
+
+```bash
+# All campaigns, newest first
+curl '{{BASE_URL}}/api/system/whatsapp/campaigns' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}'
+
+# One campaign
+curl '{{BASE_URL}}/api/system/whatsapp/campaigns/6650f2...' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}'
+```
+
+### Response (detail)
+
+```json
+{
+  "id": "6650f2...",
+  "name": "July re-engagement",
+  "template_id": "5da48971-...",
+  "params": ["*Monsoon*", "50%", "July 20"],
+  "target": "tiers",
+  "tiers": ["low", "inactive"],
+  "total_recipients": 142,
+  "status": "completed",
+  "created_at": 1752105600,
+  "completed_at": 1752105745,
+  "stats": {
+    "pending": 0,
+    "sent": 130,
+    "delivered": 118,
+    "read": 74,
+    "failed": 12
+  }
+}
+```
+
+### What the stats mean
+
+| Stat | Meaning |
+|---|---|
+| `pending` | Not attempted yet (campaign still running) |
+| `sent` | Accepted by Gupshup, no delivery receipt yet |
+| `delivered` | Reached the user's phone |
+| `read` | The user opened/saw the message |
+| `failed` | Send rejected by Gupshup, or delivery failed (blocked number, opted out, etc.) |
+
+A message moves forward only: `pending → sent → delivered → read` (or `failed`). `delivered`/`read` include everything before them — a `read` message was obviously also delivered — so **total = pending + sent + delivered + read + failed**.
+
+---
+
+## 8. Delivery-event webhook — `POST /api/whatsapp/webhook` ⚠️ setup required
+
+`delivered` and `read` counts come from Gupshup **message-event callbacks**. This endpoint (public, no auth, always returns 200) receives them and updates the campaign stats.
+
+**One-time setup:** in the Gupshup dashboard (or via their Set Callback URL API), set your app's callback URL to:
+
+```
+https://<your-domain>/api/whatsapp/webhook
+```
+
+and make sure message events (sent / delivered / read / failed) are enabled. Until this is configured, campaigns will only ever show `sent` and `failed` (known at send time) — `delivered` and `read` will stay at 0.
+
+Events for non-campaign messages (e.g. login OTPs) hit the same endpoint and are safely ignored.
+
+---
+
+## End-to-end flow: template → campaign → stats
+
+```bash
+# 1. Create the template (see section 1) and wait until APPROVED (section 2)
+
+# 2. Grab the template id
+curl -G '{{BASE_URL}}/api/system/whatsapp/templates' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}' \
+  --data-urlencode 'elementName=monsoon_sale' \
+# → templates[0].id = "5da48971-..."
+
+# 3. Fire the campaign
+curl -X POST '{{BASE_URL}}/api/system/whatsapp/campaigns' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}' \
+  -H 'Content-Type: application/json' \
+  -d '{ "name": "Monsoon blast", "template_id": "5da48971-...", "params": ["*Monsoon*", "50%"], "target": "all" }'
+# → campaign_id = "6650f2..."
+
+# 4. Watch the numbers roll in
+curl '{{BASE_URL}}/api/system/whatsapp/campaigns/6650f2...' \
+  -H 'Authorization: Bearer {{ADMIN_TOKEN}}'
+```
+
+---
+
 ## Notes & gotchas
 
 - **Single WABA**: these routes always act on the Gupshup app configured via `GUPSHUP_APP_ID`/`GUPSHUP_TOKEN` — there's no multi-app/multi-tenant support here.
@@ -340,3 +504,5 @@ curl -G '{{BASE_URL}}/api/system/whatsapp/templates' \
 - **Category miscategorization**: since June 2024, Meta may auto-flag/auto-correct a template's category. Check `containerMeta.correctCategory` and `oldCategory` fields in List responses.
 - **Carousel + media**: carousel templates with media cannot be edited after creation (Gupshup limitation).
 - **Rate limit**: Gupshup allows 10 requests/minute on template APIs — expect `429` if the dashboard batches too many calls.
+- **Campaigns only send APPROVED templates**: firing a campaign with a `PENDING`/`REJECTED` template makes every recipient fail — check the template status first.
+- **Webhook is a prerequisite for delivered/read stats**: see [section 8](#8-delivery-event-webhook--post-apiwhatsappwebhook-️-setup-required); without it stats stop at `sent`/`failed`.

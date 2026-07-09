@@ -17,6 +17,8 @@ guided_viz_sessions = db["guided_viz_sessions"]
 notifications = db["notifications"]
 activity_log = db["activity_log"]
 phone_otps = db["phone_otps"]
+whatsapp_campaigns = db["whatsapp_campaigns"]
+whatsapp_campaign_messages = db["whatsapp_campaign_messages"]
 
 
 def return_system_prompt():
