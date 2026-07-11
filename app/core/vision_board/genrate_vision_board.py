@@ -1,6 +1,5 @@
-from google import genai
-from google.genai import types
-from app.utils.env_load import gemini_api_key, cloud_api_key, cloud_api_secret, cloud_name
+from openai import OpenAI
+from app.utils.env_load import openai_api_key, cloud_api_key, cloud_api_secret, cloud_name
 from app.services.brevo.client import send_vision_board_ready_email
 from app.core.vision_board.vision_board_prompt import build_prompt
 from app.services.db.user_profile_utils import update_vision_board
@@ -8,11 +7,11 @@ from app.services.db.mongo_utils import user_profile
 from app.utils.logger_config import logger
 import cloudinary
 import cloudinary.uploader
-import base64
 
+IMAGE_MODEL = "gpt-image-2-2026-04-21"
 
 # ==== CLIENTS ====
-gemini_client = genai.Client(api_key=gemini_api_key)
+openai_client = OpenAI(api_key=openai_api_key)
 
 cloudinary.config(
     cloud_name=cloud_name,
@@ -21,36 +20,19 @@ cloudinary.config(
 )
 
 
-# ==== GEMINI IMAGE ====
-def gemini_image(prompt: str) -> str:
-    logger.info("Generating image with Gemini")
-    contents = [
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=prompt)],
-        ),
-    ]
-    config = types.GenerateContentConfig(
-        response_modalities=["IMAGE", "TEXT"],
+# ==== OPENAI IMAGE ====
+def openai_image(prompt: str) -> str:
+    logger.info("Generating image with OpenAI", extra={"model": IMAGE_MODEL})
+    result = openai_client.images.generate(
+        model=IMAGE_MODEL,
+        prompt=prompt,
     )
 
-    for chunk in gemini_client.models.generate_content_stream(
-        model="gemini-2.5-flash-image",
-        contents=contents,
-        config=config,
-    ):
-        if not chunk.candidates:
-            continue
-        parts = chunk.candidates[0].content.parts
-        if not parts:
-            continue
-        for part in parts:
-            if part.inline_data and part.inline_data.data:
-                b64_image = base64.b64encode(part.inline_data.data).decode("utf-8")
-                logger.info("Gemini image generated successfully")
-                return b64_image
+    if not result.data or not result.data[0].b64_json:
+        raise ValueError("OpenAI did not return an image")
 
-    raise ValueError("Gemini did not return an image")
+    logger.info("OpenAI image generated successfully")
+    return result.data[0].b64_json
 
 
 # ==== CLOUDINARY UPLOAD ====
@@ -89,8 +71,8 @@ def generate_vision_background(email: str, answers: dict, vibe: dict):
             raise ValueError("Prompt is not a string! Got: " + str(type(prompt)))
         logger.info("Vision board prompt built successfully", extra={"email": email})
 
-        #   Gemini
-        b64_image = gemini_image(prompt)
+        #   OpenAI image generation
+        b64_image = openai_image(prompt)
 
         #   Cloudinary
         secure_url = cloudinary_upload(b64_image, email)
