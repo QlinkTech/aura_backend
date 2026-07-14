@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from fastapi.responses import JSONResponse
 from app.utils.schema import CreateWhatsappTemplateModel, EditWhatsappTemplateModel, TriggerWhatsappCampaignModel
 from app.services.gupshup.client import create_template, list_templates, edit_template, delete_template, upload_template_media
-from app.services.db.whatsapp_campaign_utils import create_campaign, run_campaign, get_campaign, list_campaigns
+from app.services.db.whatsapp_campaign_utils import create_campaign, run_campaign, get_campaign, list_campaigns, list_personalization_fields, get_campaign_contacts
 from app.utils.logger_config import logger
 
 whatsapp_router = APIRouter()
@@ -89,7 +89,7 @@ def remove_template(element_name: str):
 
 @whatsapp_router.post("/whatsapp/templates/media")
 def upload_media(
-    file_type: str = Form(...),
+    file_type: str = Form(..., description='MIME type, e.g. "image/png", "video/mp4", "application/pdf" — not a bare extension'),
     file: Optional[UploadFile] = File(None),
     file_url: Optional[str] = Form(None),
 ):
@@ -114,6 +114,18 @@ def upload_media(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@whatsapp_router.get("/whatsapp/campaigns/personalization-fields")
+def get_personalization_fields():
+    """User profile fields available for per-recipient params, e.g. {"field": "username", "fallback": "there"}."""
+    try:
+        return {"fields": list_personalization_fields()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("System: error listing personalization fields", extra={"error": str(e)})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @whatsapp_router.post("/whatsapp/campaigns")
 def trigger_campaign(payload: TriggerWhatsappCampaignModel, background_tasks: BackgroundTasks):
     """Trigger a template-message campaign to all users or to specific engagement tiers. Sends run in the background."""
@@ -126,6 +138,9 @@ def trigger_campaign(payload: TriggerWhatsappCampaignModel, background_tasks: Ba
             target=payload.target,
             tiers=payload.tiers,
             numbers=payload.numbers,
+            media_type=payload.media_type,
+            media_url=payload.media_url,
+            media_id=payload.media_id,
         )
         background_tasks.add_task(run_campaign, result["campaign_id"])
         return {"success": True, **result}
@@ -157,4 +172,21 @@ def get_campaign_details(campaign_id: str):
         raise
     except Exception as e:
         logger.error("System: error fetching WhatsApp campaign", extra={"campaign_id": campaign_id, "error": str(e)})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@whatsapp_router.get("/whatsapp/campaigns/{campaign_id}/contacts")
+def get_campaign_contacts_route(
+    campaign_id: str,
+    status: Optional[str] = None,
+    page_no: int = 1,
+    page_size: int = 50,
+):
+    """Per-contact delivery breakdown for a campaign — who received it, read it, failed, etc. Optionally filter by status: pending/sent/delivered/read/failed."""
+    try:
+        return get_campaign_contacts(campaign_id, status_filter=status, page_no=page_no, page_size=page_size)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("System: error fetching WhatsApp campaign contacts", extra={"campaign_id": campaign_id, "error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)

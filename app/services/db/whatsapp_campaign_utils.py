@@ -8,6 +8,25 @@ from app.utils.logger_config import logger
 
 VALID_TIERS = {"daily", "high", "medium", "low", "inactive"}
 
+# Fields a campaign param is allowed to pull from user_profile for per-recipient personalization.
+# Deliberately an allowlist, not "whatever's in params" — this data goes straight into a WhatsApp
+# message, so it must exclude anything sensitive (password hashes, tokens, etc.) even if a caller asks for it.
+PROFILE_FIELD_LABELS = {
+    "username": "Name",
+    "email": "Email",
+    "phone": "Phone number",
+    "engagement_tier": "Engagement tier (current)",
+    "trial_engagement_tier": "Engagement tier (during trial)",
+    "engagement_status": "Engagement status (cold/warm/hot/converted)",
+    "subscription_status": "Subscription status",
+}
+ALLOWED_PROFILE_FIELDS = set(PROFILE_FIELD_LABELS)
+
+
+def list_personalization_fields() -> list:
+    """Fields the frontend can offer for per-recipient params, e.g. {"field": "username", "fallback": "there"}."""
+    return [{"field": field, "label": label} for field, label in PROFILE_FIELD_LABELS.items()]
+
 # Delivery lifecycle: a status only ever moves forward; "failed" is terminal.
 _STATUS_RANK = {"pending": 0, "submitted": 1, "sent": 2, "delivered": 3, "read": 4, "failed": 5}
 
@@ -31,16 +50,46 @@ def _normalize_manual_numbers(numbers: list) -> list:
     return cleaned
 
 
-def resolve_recipients(target: str, tiers: list = None, numbers: list = None) -> list:
-    """Returns [{email, phone}] — users with a phone (optionally tier-filtered), or manually entered numbers."""
+def _normalize_params(params: list) -> list:
+    """Converts each param to a plain str (fixed) or dict (field ref), validating field refs against the allowlist."""
+    normalized = []
+    for p in params:
+        if isinstance(p, str):
+            normalized.append(p)
+            continue
+        spec = p.model_dump() if hasattr(p, "model_dump") else dict(p)
+        if spec.get("field") not in ALLOWED_PROFILE_FIELDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"params.field must be one of: {', '.join(sorted(ALLOWED_PROFILE_FIELDS))}",
+            )
+        normalized.append(spec)
+    return normalized
+
+
+def _resolve_params(params: list, recipient: dict) -> list:
+    """Fills each param for one recipient: fixed strings pass through, field refs pull from the recipient's profile data."""
+    resolved = []
+    for p in params:
+        if isinstance(p, str):
+            resolved.append(p)
+        else:
+            value = recipient.get(p["field"])
+            resolved.append(str(value) if value not in (None, "") else p.get("fallback", ""))
+    return resolved
+
+
+def resolve_recipients(target: str, tiers: list = None, numbers: list = None, extra_fields: set = None) -> list:
+    """Returns [{email, phone, <extra_fields>...}] — users with a phone (optionally tier-filtered), or manually entered numbers."""
+    extra_fields = extra_fields or set()
+    projection = {"_id": 0, "email": 1, "phone": 1, **{f: 1 for f in extra_fields}}
+
     if target == "numbers":
         phones = _normalize_manual_numbers(numbers)
-        # attach emails for numbers that belong to known users, so stats stay traceable
-        known = {
-            doc["phone"]: doc["email"]
-            for doc in user_profile.find({"phone": {"$in": phones}}, {"_id": 0, "email": 1, "phone": 1})
-        }
-        return [{"email": known.get(p), "phone": p} for p in phones]
+        # attach profile data for numbers that belong to known users, so stats + personalization stay traceable;
+        # numbers with no matching user fall back to {} (field params use their configured fallback value)
+        known = {doc["phone"]: doc for doc in user_profile.find({"phone": {"$in": phones}}, projection)}
+        return [{**known.get(p, {}), "email": known.get(p, {}).get("email"), "phone": p} for p in phones]
 
     query = {"phone": {"$nin": [None, ""]}}
     if target == "tiers":
@@ -52,14 +101,20 @@ def resolve_recipients(target: str, tiers: list = None, numbers: list = None) ->
             )
         query["engagement_tier"] = {"$in": tiers}
 
-    return [
-        {"email": doc["email"], "phone": doc["phone"]}
-        for doc in user_profile.find(query, {"_id": 0, "email": 1, "phone": 1})
-    ]
+    return list(user_profile.find(query, projection))
 
 
-def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None, numbers: list = None) -> dict:
-    recipients = resolve_recipients(target, tiers, numbers)
+def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None, numbers: list = None,
+                    media_type: str = None, media_url: str = None, media_id: str = None) -> dict:
+    if media_type and not (media_url or media_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="media_url or media_id is required when media_type is set")
+    if (media_url or media_id) and not media_type:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="media_type is required when media_url/media_id is set")
+
+    normalized_params = _normalize_params(params)
+    extra_fields = {p["field"] for p in normalized_params if isinstance(p, dict)}
+
+    recipients = resolve_recipients(target, tiers, numbers, extra_fields)
     if not recipients:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users with a phone number match this audience")
 
@@ -67,10 +122,13 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
     campaign_doc = {
         "name": name,
         "template_id": template_id,
-        "params": params,
+        "params": normalized_params,
         "target": target,
         "tiers": tiers if target == "tiers" else None,
         "numbers": [r["phone"] for r in recipients] if target == "numbers" else None,
+        "media_type": media_type,
+        "media_url": media_url,
+        "media_id": media_id,
         "total_recipients": len(recipients),
         "status": "processing",
         "created_at": now,
@@ -81,8 +139,9 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
     whatsapp_campaign_messages.insert_many([
         {
             "campaign_id": campaign_id,
-            "email": r["email"],
+            "email": r.get("email"),
             "phone": r["phone"],
+            "params": _resolve_params(normalized_params, r),
             "gupshup_message_id": None,
             "status": "pending",
             "error": None,
@@ -109,7 +168,10 @@ def run_campaign(campaign_id: str) -> None:
             message_id = send_template_message(
                 phone_number=msg["phone"],
                 template_id=campaign["template_id"],
-                params=campaign["params"],
+                params=msg["params"],
+                media_type=campaign.get("media_type"),
+                media_url=campaign.get("media_url"),
+                media_id=campaign.get("media_id"),
             )
             whatsapp_campaign_messages.update_one(
                 {"_id": msg["_id"]},
@@ -159,6 +221,49 @@ def get_campaign(campaign_id: str) -> dict:
     campaign["id"] = str(campaign.pop("_id"))
     campaign["stats"] = _stats_for(oid)
     return campaign
+
+
+# "submitted" (our send accepted by Gupshup) and "sent" (Gupshup's own "sent" webhook event) are the
+# same user-facing state — merged in stats, so merge here too for a consistent per-contact status.
+_DISPLAY_STATUS = {"submitted": "sent"}
+STATUS_FILTERS = {"pending", "sent", "delivered", "read", "failed"}
+
+
+def get_campaign_contacts(campaign_id: str, status_filter: str = None, page_no: int = 1, page_size: int = 50) -> dict:
+    """Per-recipient delivery breakdown for a campaign: who received it, who read it, who failed, etc."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid campaign id")
+
+    if not whatsapp_campaigns.find_one({"_id": oid}, {"_id": 1}):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    if status_filter and status_filter not in STATUS_FILTERS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"status must be one of: {', '.join(sorted(STATUS_FILTERS))}")
+
+    query = {"campaign_id": oid}
+    if status_filter:
+        db_statuses = [db_status for db_status, display in _DISPLAY_STATUS.items() if display == status_filter] + [status_filter]
+        query["status"] = {"$in": db_statuses}
+
+    page_no = max(page_no, 1)
+    page_size = min(max(page_size, 1), 200)
+    total = whatsapp_campaign_messages.count_documents(query)
+
+    contacts = []
+    cursor = whatsapp_campaign_messages.find(query).sort("_id", 1).skip((page_no - 1) * page_size).limit(page_size)
+    for doc in cursor:
+        contacts.append({
+            "email": doc.get("email"),
+            "phone": doc.get("phone"),
+            "params": doc.get("params", []),
+            "status": _DISPLAY_STATUS.get(doc["status"], doc["status"]),
+            "error": doc.get("error"),
+            "updated_at": doc.get("updated_at"),
+        })
+
+    return {"total": total, "page_no": page_no, "page_size": page_size, "contacts": contacts}
 
 
 def list_campaigns() -> list:

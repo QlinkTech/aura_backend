@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 from pydantic import BaseModel
 
 class RegisterRequest(BaseModel):
@@ -108,13 +108,22 @@ class CreateWhatsappTemplateModel(BaseModel):
     is_cpr: Optional[bool] = None
     parameter_format: Optional[Literal["NAMED", "POSITIONAL"]] = None
 
+class CampaignFieldParam(BaseModel):
+    field: str            # user_profile field to pull per-recipient, e.g. "username"
+    fallback: str = ""    # used when the recipient has no value for this field (e.g. manually entered numbers)
+
 class TriggerWhatsappCampaignModel(BaseModel):
     name: str
     template_id: str                 # id of an APPROVED template (from Get Templates)
-    params: list = []                # values for the template's {{1}}, {{2}}, ... placeholders
+    # Each entry fills one {{n}} placeholder, in order. Either a fixed string sent to everyone,
+    # or {"field": "username", "fallback": "there"} to pull that value from each recipient's profile.
+    params: list[Union[str, CampaignFieldParam]] = []
     target: Literal["all", "tiers", "numbers"] = "all"
     tiers: Optional[list] = None     # required when target="tiers": daily/high/medium/low/inactive
     numbers: Optional[list] = None   # required when target="numbers": manually entered phone numbers (with country code)
+    media_type: Optional[Literal["image", "video", "document"]] = None  # required for media templates
+    media_url: Optional[str] = None  # public URL of the media (one of media_url/media_id required with media_type)
+    media_id: Optional[str] = None   # Gupshup media id from a prior upload
 
 class EditWhatsappTemplateModel(BaseModel):
     content: Optional[str] = None

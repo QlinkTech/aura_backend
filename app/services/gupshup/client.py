@@ -38,8 +38,11 @@ def send_otp_template(phone_number: str, otp_code: str) -> None:
     logger.info("OTP template sent", extra={"phone_number": phone_number, "response": response.json()})
 
 
-def send_template_message(phone_number: str, template_id: str, params: list) -> str:
-    """Sends an approved template message to one number. Returns the Gupshup messageId."""
+def send_template_message(phone_number: str, template_id: str, params: list, media_type: str = None, media_url: str = None, media_id: str = None) -> str:
+    """Sends an approved template message to one number. Returns the Gupshup messageId.
+
+    For media templates (image/video/document) pass media_type plus media_url and/or media_id —
+    they become the 'message' form field Gupshup requires alongside the template params."""
     if not gupshup_app_id or not gupshup_token or not gupshup_app_name:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="WhatsApp service not configured")
 
@@ -54,6 +57,14 @@ def send_template_message(phone_number: str, template_id: str, params: list) -> 
         "src.name": gupshup_app_name,
         "template": json.dumps({"id": template_id, "params": params}),
     }
+
+    if media_type:
+        media_obj = {}
+        if media_url:
+            media_obj["link"] = media_url
+        if media_id:
+            media_obj["id"] = media_id
+        data["message"] = json.dumps({"type": media_type, media_type: media_obj})
 
     response = requests.post(url, headers=headers, data=data, timeout=10)
     if not response.ok:
@@ -225,7 +236,11 @@ def delete_template(element_name: str) -> dict:
 
 
 def upload_template_media(file_type: str, file_bytes: bytes = None, filename: str = None, content_type: str = None, file_url: str = None) -> dict:
-    """Uploads sample media for a template and returns a handleId (for the exampleMedia param)."""
+    """Uploads sample media for a template and returns a handleId (for the exampleMedia param).
+
+    file_type must be a MIME type (e.g. "image/png", "video/mp4", "application/pdf"), not a bare
+    extension or category — Gupshup accepts those without error but the resulting handleId gets
+    silently rejected later at template-submission time with "The type of file is not supported"."""
     if not gupshup_app_id or not gupshup_token:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="WhatsApp template service not configured")
     if not file_bytes and not file_url:
@@ -237,10 +252,18 @@ def upload_template_media(file_type: str, file_bytes: bytes = None, filename: st
     headers = {"token": gupshup_token}
 
     if file_bytes is not None:
-        files = {"file": (filename or "upload", file_bytes, content_type or "application/octet-stream")}
-        response = requests.post(url, headers=headers, data={"file_type": file_type}, files=files, timeout=30)
+        files = {
+            "file_type": (None, file_type),
+            "file": (filename or "upload", file_bytes, content_type or "application/octet-stream"),
+        }
     else:
-        response = requests.post(url, headers=headers, data={"file_type": file_type, "file": file_url}, timeout=30)
+        # Gupshup expects multipart/form-data even for the URL variant (per their OpenAPI spec) —
+        # (None, value) forces requests to encode plain text fields as multipart, not urlencoded.
+        files = {
+            "file_type": (None, file_type),
+            "file": (None, file_url),
+        }
+    response = requests.post(url, headers=headers, files=files, timeout=30)
 
     if not response.ok:
         logger.error("Gupshup template media upload failed", extra={"status": response.status_code, "body": response.text})
