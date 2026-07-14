@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import datetime
 from threading import Lock
 
@@ -24,33 +23,25 @@ class SingletonLogger:
             return cls._instance
 
     def _initialize_logger(self):
-        log_file_path = "logs/app.log"
-        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
-
         self.logger = logging.getLogger("SingletonLogger")
         self.logger.setLevel(logging.DEBUG)
 
         # Avoid duplicate handlers
         if not self.logger.handlers:
+            # Log to stdout only. Docker captures stdout and rotates it; an
+            # in-container FileHandler would be ephemeral and unbounded.
+            # (see standards/container_methods.md §5)
             stream_handler = logging.StreamHandler()
             stream_handler.setLevel(logging.DEBUG)
-
-            file_handler = logging.FileHandler(filename=log_file_path, mode="a")
-            file_handler.setLevel(logging.DEBUG)
-
-            formatter = JsonFormatter()
-            stream_handler.setFormatter(formatter)
-            file_handler.setFormatter(formatter)
-
+            stream_handler.setFormatter(JsonFormatter())
             self.logger.addHandler(stream_handler)
-            self.logger.addHandler(file_handler)
 
 
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for logging in pretty-printed JSON format."""
 
     def format(self, record: logging.LogRecord):
-        """Format log records as pretty-printed JSON."""
+        """Format each log record as a single line of JSON (one event = one line)."""
         # Base log data with only the required fields
         log_data = {
             "logged_at": datetime.now().isoformat(),
@@ -84,11 +75,8 @@ class JsonFormatter(logging.Formatter):
                 }
             return f"<Unserializable object of type {obj.__class__.__name__}>"
 
-        # Return as JSON
-        return (
-            json.dumps(log_data, indent=2, default=custom_serializer)
-            + "\n**************\n"
-        )
+        # Single-line JSON — the StreamHandler appends the trailing newline.
+        return json.dumps(log_data, default=custom_serializer)
 
 
 # Create a single logger instance

@@ -1,0 +1,42 @@
+# Production deploy stack (see standards/container_methods.md §3).
+# CI copies this file to /opt/qlink on the server and runs
+# `docker compose pull && docker compose up -d`. Local development uses
+# compose.yaml (build + --reload) instead.
+services:
+  qlink:
+    image: syd.vultrcr.com/qlink01/aura_serve:latest
+    container_name: qlink
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    healthcheck:
+      # slim image has no curl/wget — use the Python already in the image
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ping', timeout=4).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - autoheal=true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"     # ~100 MB hard cap
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: qlink-autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "10"
+      AUTOHEAL_START_PERIOD: "30"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

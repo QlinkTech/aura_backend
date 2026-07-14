@@ -37,67 +37,111 @@ jobs:
           docker build -t $REGISTRY_PATH:latest .
           docker push $REGISTRY_PATH:latest
 
+      - name: Copy docker-compose.yml to Droplet
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "docker-compose.yml"
+          target: "/opt/qlink"
+
       - name: Deploy to DigitalOcean Droplet
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.SERVER_HOST }} 
-          username: ${{ secrets.SERVER_USERNAME }} 
-          password: ${{ secrets.SERVER_PASSWORD }} 
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           script: |
+            set -e
+            mkdir -p /opt/qlink
+            cd /opt/qlink
+
+            # Write .env from GitHub secrets (GitHub stays the single source of truth).
+            # Written with restrictive perms; overwritten fresh on every deploy.
+            umask 077
+            cat > .env <<'EOF'
+            PYTHONUNBUFFERED=1
+            PYTHONDONTWRITEBYTECODE=1
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            APP_PASSWORD=${{ secrets.APP_PASSWORD }}
+            PINECONE_API=${{ secrets.PINECONE_API }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+            CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+            CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            LOGIN_USERNAME=${{ secrets.LOGIN_USERNAME }}
+            LOGIN_PASS=${{ secrets.LOGIN_PASS }}
+            RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+            RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }}
+            RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }}
+            ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
+            SARVAM_API=${{ secrets.SARVAM_API }}
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+            BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }}
+            R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }}
+            R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}
+            R2_BUCKET=${{ secrets.R2_BUCKET }}
+            R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }}
+            GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }}
+            GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }}
+            GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }}
+            EOF
+
+            # Ensure Docker container logs are kept for at most 2 days.
+            # json-file rotation (in compose) caps size; logrotate caps age.
+            cat > /etc/logrotate.d/docker-qlink <<'EOF'
+            /var/lib/docker/containers/*/*-json.log {
+              daily
+              rotate 2
+              compress
+              missingok
+              notifempty
+              copytruncate
+            }
+            EOF
+
+            # Ensure Docker Compose v2 (the `docker compose` plugin) is present.
+            # Installs the plugin binary directly so it works regardless of how
+            # Docker was installed. Idempotent — only runs if missing.
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "Docker Compose v2 not found — installing plugin..."
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -SL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$(uname -m)" \
+                -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              docker compose version
+            fi
+
             # Login to Vultr Container Registry
             docker login -u ${{ secrets.VULTR_REGISTRY_USERNAME }} -p ${{ secrets.VULTR_REGISTRY_PASSWORD }} ${{ secrets.VULTR_REGISTRY_URL }}
 
-            # Pull the latest image
-            docker pull syd.vultrcr.com/qlink01/aura_serve:latest
+            # One-time migration: remove the old container that was created by
+            # `docker run` (not compose) so compose can take ownership of the name.
+            # Harmless on subsequent deploys since compose recreates it anyway.
+            if ! docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' qlink 2>/dev/null | grep -q .; then
+              docker rm -f qlink 2>/dev/null || true
+            fi
 
-            # Stop and remove existing container if it exists
-            docker stop qlink || true
-            docker rm qlink || true
+            # Pull the latest image and (re)start the stack declaratively
+            docker compose pull
+            docker compose up -d --remove-orphans
 
-            # Run new container
-            docker run -d --name qlink -p 8000:8000 \
-            -e PYTHONUNBUFFERED=1 \
-            -e PYTHONDONTWRITEBYTECODE=1 \
-            -e MONGO_URI=${{ secrets.MONGO_URI }} \
-            -e SECRET_KEY=${{ secrets.SECRET_KEY }} \
-            -e APP_PASSWORD=${{ secrets.APP_PASSWORD }} \
-            -e PINECONE_API=${{ secrets.PINECONE_API }} \
-            -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
-            -e GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
-            -e CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }} \
-            -e CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }} \
-            -e CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }} \
-            -e LOGIN_USERNAME=${{ secrets.LOGIN_USERNAME }} \
-            -e LOGIN_PASS=${{ secrets.LOGIN_PASS }} \
-            -e RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }} \
-            -e RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }} \
-            -e RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }} \
-            -e TEST_RAZORPAY_APP_ID=${{ secrets.TEST_RAZORPAY_APP_ID }} \
-            -e TEST_RAZORPAY_APP_SECRETE=${{ secrets.TEST_RAZORPAY_APP_SECRETE }} \
-            -e ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }} \
-            -e SARVAM_API=${{ secrets.SARVAM_API }} \
-            -e BREVO_API_KEY=${{ secrets.BREVO_API_KEY }} \
-            -e FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
-            -e R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }} \
-            -e R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }} \
-            -e R2_ENDPOINT=${{ secrets.R2_ENDPOINT }} \
-            -e R2_BUCKET=${{ secrets.R2_BUCKET }} \
-            -e ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }} \
-            -e R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }} \
-            -e GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
-            -e GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} \
-            -e GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }} \
-            -e GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }} \
-            -e GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }} \
-            syd.vultrcr.com/qlink01/aura_serve:latest
+            # Show status for the deploy log
+            docker compose ps
 
       - name: Cleanup Old Images
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.SERVER_HOST }}    
-          username: ${{ secrets.SERVER_USERNAME }}   
-          password: ${{ secrets.SERVER_PASSWORD }}   
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             # Remove dangling images to free up space
             docker image prune -f
-
