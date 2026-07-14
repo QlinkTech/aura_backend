@@ -46,7 +46,7 @@ app.add_middleware(
 )
 
 
-@app.get("/ping", tags=["Health"])
+@app.api_route("/ping", methods=["GET", "HEAD"], tags=["Health"])
 def ping():
     return {"status": "ok", "message": "MMD - Qlink backend is running perfectly fine."}
 
