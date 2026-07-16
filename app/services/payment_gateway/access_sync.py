@@ -1,6 +1,7 @@
 import time
 from app.services.db.mongo_utils import user_profile
 from app.services.brevo.client import send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from app.utils.logger_config import logger
 
 # Mirrors the access-grant set in app.services.auth_service.get_active_user —
@@ -80,5 +81,6 @@ def sync_access_status():
                 remove_contact_from_list(email=email, list_id=LIST_TRIAL)
             except Exception as e:
                 logger.error("Failed to send trial ended email during access sync", extra={"email": email, "error": str(e)})
+            send_trial_ended_whatsapp(email=email)
 
     logger.info("Access status sync complete", extra={"updated": updated})

@@ -5,6 +5,7 @@ import time
 from fastapi import HTTPException, status
 from app.services.db.mongo_utils import phone_otps, user_profile
 from app.services.gupshup.client import send_otp_template
+from app.services.gupshup.lifecycle import send_welcome_whatsapp
 from app.utils.logger_config import logger
 
 OTP_EXPIRY_SECONDS = 300       # 5 minutes
@@ -64,10 +65,15 @@ def verify_phone_otp(email: str, phone: str, otp: str) -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect OTP.")
 
     phone_otps.delete_one({"_id": record["_id"]})
+    user = user_profile.find_one({"email": email}, {"username": 1, "phone_verified": 1})
     user_profile.update_one(
         {"email": email},
         {"$set": {"phone": phone, "phone_verified": True, "updated_at": int(time.time())}}
     )
 
     logger.info("Phone number verified", extra={"email": email, "phone": phone})
+
+    # Welcome message only on the first verification — re-verifying a new number shouldn't resend it
+    if user and not user.get("phone_verified"):
+        send_welcome_whatsapp(phone_number=phone, name=user.get("username") or "")
     return {"message": "Phone number verified successfully.", "phone": phone}

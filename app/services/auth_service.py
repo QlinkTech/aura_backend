@@ -1,6 +1,7 @@
 import time
 from fastapi import HTTPException, status, Depends
 from app.services.brevo.client import send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from jwt import decode, ExpiredSignatureError, InvalidTokenError
@@ -102,6 +103,7 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
                 remove_contact_from_list(email=email, list_id=LIST_TRIAL)
             except Exception:
                 pass
+            send_trial_ended_whatsapp(email=email)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
 
     if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES:

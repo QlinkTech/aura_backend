@@ -7,6 +7,7 @@ from google.auth.transport import requests as google_requests
 from app.services.db.mongo_utils import user_profile, password_reset_tokens
 from app.services.auth_service import hash_password, verify_password, create_access_token
 from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact, send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from app.utils.env_load import frontend_url, google_client_id, google_client_secret
 from app.utils.logger_config import logger
 
@@ -109,6 +110,7 @@ def google_login(id_token: str):
                         remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                     except Exception as e:
                         logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
+                    send_trial_ended_whatsapp(email=email)
             logger.info("Existing user logged in via Google", extra={"email": email})
         else:
             user_profile.insert_one({
@@ -213,6 +215,7 @@ def google_code_login(code: str, redirect_uri: str):
                         remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                     except Exception as e:
                         logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
+                    send_trial_ended_whatsapp(email=email)
             logger.info("Existing user logged in via Google code flow", extra={"email": email})
         else:
             user_profile.insert_one({
@@ -274,6 +277,7 @@ def login(email: str, password: str):
                     remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                 except Exception as e:
                     logger.error("Failed to send trial ended email at login", extra={"email": email, "error": str(e)})
+                send_trial_ended_whatsapp(email=email)
 
         token = create_access_token({"sub": email, "email": email})
         logger.info("Login successful", extra={"email": email})
