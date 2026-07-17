@@ -1,6 +1,10 @@
 """
 One-time migration: sync existing users into the correct Brevo lists.
 
+PARKED — will not run as-is. The Brevo contact-list code this depends on is
+commented out in app/services/mail/client.py (Resend migration); uncomment it
+there before running this again.
+
 List rules:
   #3  subscribed  — is_paid = true
   #8  cancelled   — subscription_status = cancelled

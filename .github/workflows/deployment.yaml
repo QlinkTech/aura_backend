@@ -80,7 +80,7 @@ jobs:
             ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
             SARVAM_API=${{ secrets.SARVAM_API }}
             ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-            BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}

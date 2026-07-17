@@ -6,7 +6,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 from app.services.db.mongo_utils import user_profile, password_reset_tokens
 from app.services.auth_service import hash_password, verify_password, create_access_token
-from app.services.brevo.client import send_account_created_email, send_reset_password_email, add_registered_contact, send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.mail.client import send_account_created_email, send_reset_password_email, send_trial_ended_email
 from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from app.utils.env_load import frontend_url, google_client_id, google_client_secret
 from app.utils.logger_config import logger
@@ -62,11 +62,11 @@ def create_account(email: str, password: str, user_name: str, phone: str = ""):
         except Exception as e:
             logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
 
-        try:
-            add_registered_contact(email=email, name=user_name)
-            logger.info("Contact added to registered list", extra={"email": email})
-        except Exception as e:
-            logger.error("Failed to add contact to registered list", extra={"email": email, "error": str(e)})
+        # try:
+        #     add_registered_contact(email=email, name=user_name)
+        #     logger.info("Contact added to registered list", extra={"email": email})
+        # except Exception as e:
+        #     logger.error("Failed to add contact to registered list", extra={"email": email, "error": str(e)})
 
         return {"message": "Account created successfully", "access_token": token, "token_type": "bearer", "phone_verified": False}
     except HTTPException:
@@ -107,7 +107,7 @@ def google_login(id_token: str):
                     logger.info("Trial/free plan expired at Google login — access revoked", extra={"email": email})
                     try:
                         send_trial_ended_email(to_email=email)
-                        remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                        # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                     except Exception as e:
                         logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
                     send_trial_ended_whatsapp(email=email)
@@ -130,7 +130,7 @@ def google_login(id_token: str):
             logger.info("New user created via Google", extra={"email": email})
             try:
                 send_account_created_email(to_email=email, to_name=full_name)
-                add_registered_contact(email=email, name=full_name)
+                # add_registered_contact(email=email, name=full_name)
             except Exception as e:
                 logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
 
@@ -212,7 +212,7 @@ def google_code_login(code: str, redirect_uri: str):
                     logger.info("Trial/free plan expired at Google code login — access revoked", extra={"email": email})
                     try:
                         send_trial_ended_email(to_email=email)
-                        remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                        # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                     except Exception as e:
                         logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
                     send_trial_ended_whatsapp(email=email)
@@ -235,7 +235,7 @@ def google_code_login(code: str, redirect_uri: str):
             logger.info("New user created via Google code flow", extra={"email": email})
             try:
                 send_account_created_email(to_email=email, to_name=full_name)
-                add_registered_contact(email=email, name=full_name)
+                # add_registered_contact(email=email, name=full_name)
             except Exception as e:
                 logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
 
@@ -274,7 +274,7 @@ def login(email: str, password: str):
                 logger.info("Trial/free plan expired at login — access revoked", extra={"email": email})
                 try:
                     send_trial_ended_email(to_email=email)
-                    remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                    # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
                 except Exception as e:
                     logger.error("Failed to send trial ended email at login", extra={"email": email, "error": str(e)})
                 send_trial_ended_whatsapp(email=email)

@@ -1,6 +1,6 @@
 from openai import OpenAI
 from app.utils.env_load import openai_api_key, cloud_api_key, cloud_api_secret, cloud_name
-from app.services.brevo.client import send_vision_board_ready_email
+from app.services.mail.client import send_vision_board_ready_email
 from app.core.vision_board.vision_board_prompt import build_prompt
 from app.services.db.user_profile_utils import update_vision_board
 from app.services.db.mongo_utils import user_profile

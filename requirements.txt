@@ -19,7 +19,7 @@ setuptools<70
 
 razorpay
 sarvamai
-brevo-python
+resend
 
 google-genai
 google-auth

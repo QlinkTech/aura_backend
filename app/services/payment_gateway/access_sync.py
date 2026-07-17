@@ -1,6 +1,6 @@
 import time
 from app.services.db.mongo_utils import user_profile
-from app.services.brevo.client import send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.mail.client import send_trial_ended_email
 from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from app.utils.logger_config import logger
 
@@ -78,7 +78,7 @@ def sync_access_status():
         if old_is_paid and not new_is_paid and is_lapsed_trial and not user_doc.get("is_bypassed"):
             try:
                 send_trial_ended_email(to_email=email)
-                remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
             except Exception as e:
                 logger.error("Failed to send trial ended email during access sync", extra={"email": email, "error": str(e)})
             send_trial_ended_whatsapp(email=email)

@@ -1,11 +1,9 @@
 import time
 from app.utils.logger_config import logger
 from app.services.db.mongo_utils import user_profile, payments
-from app.services.brevo.client import (
+from app.services.mail.client import (
     send_welcome_email, send_thank_you_email,
     send_subscription_cancelled_email,
-    add_subscribed_contact, add_cancelled_contact, add_halted_contact, add_trial_contact,
-    remove_contact_from_list, LIST_SUBSCRIBED, LIST_CANCELLED, LIST_HALTED, LIST_TRIAL,
 )
 
 
@@ -143,50 +141,50 @@ def save_subscription_event(event: str, subscription: dict):
             except Exception as e:
                 logger.error("Failed to send thank you email", extra={"email": email, "error": str(e)})
 
-        if event in ("subscription.authenticated", "subscription.activated", "subscription.charged", "subscription.resumed") and email:
-            try:
-                remove_contact_from_list(email=email, list_id=LIST_CANCELLED)
-                remove_contact_from_list(email=email, list_id=LIST_HALTED)
-            except Exception as e:
-                logger.error("Failed to remove from cancelled/halted lists", extra={"email": email, "error": str(e)})
+        # if event in ("subscription.authenticated", "subscription.activated", "subscription.charged", "subscription.resumed") and email:
+        #     try:
+        #         remove_contact_from_list(email=email, list_id=LIST_CANCELLED)
+        #         remove_contact_from_list(email=email, list_id=LIST_HALTED)
+        #     except Exception as e:
+        #         logger.error("Failed to remove from cancelled/halted lists", extra={"email": email, "error": str(e)})
 
-        if event in ("subscription.activated", "subscription.charged", "subscription.resumed") and email:
-            try:
-                username = profile.get("username", "")
-                add_subscribed_contact(email=email, name=username)
-                logger.info("Contact added to subscribed list", extra={"email": email})
-            except Exception as e:
-                logger.error("Failed to add to subscribed list", extra={"email": email, "error": str(e)})
+        # if event in ("subscription.activated", "subscription.charged", "subscription.resumed") and email:
+        #     try:
+        #         username = profile.get("username", "")
+        #         add_subscribed_contact(email=email, name=username)
+        #         logger.info("Contact added to subscribed list", extra={"email": email})
+        #     except Exception as e:
+        #         logger.error("Failed to add to subscribed list", extra={"email": email, "error": str(e)})
 
         if event == "subscription.cancelled" and email:
             try:
                 username = profile.get("username", "")
-                add_cancelled_contact(email=email, name=username)
-                remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
+                # add_cancelled_contact(email=email, name=username)
+                # remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
                 send_subscription_cancelled_email(to_email=email, to_name=username)
-                logger.info("Contact moved to cancelled list", extra={"email": email})
+                logger.info("Subscription cancelled email sent", extra={"email": email})
             except Exception as e:
-                logger.error("Failed to update cancelled contact lists", extra={"email": email, "error": str(e)})
+                logger.error("Failed to send subscription cancelled email", extra={"email": email, "error": str(e)})
 
-        if event == "subscription.halted" and email:
-            try:
-                username = profile.get("username", "")
-                add_halted_contact(email=email, name=username)
-                remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
-                logger.info("Contact moved to halted list", extra={"email": email})
-            except Exception as e:
-                logger.error("Failed to move contact to halted list", extra={"email": email, "error": str(e)})
+        # if event == "subscription.halted" and email:
+        #     try:
+        #         username = profile.get("username", "")
+        #         add_halted_contact(email=email, name=username)
+        #         remove_contact_from_list(email=email, list_id=LIST_SUBSCRIBED)
+        #         logger.info("Contact moved to halted list", extra={"email": email})
+        #     except Exception as e:
+        #         logger.error("Failed to move contact to halted list", extra={"email": email, "error": str(e)})
 
-        if email:
-            try:
-                trial_end_at = profile.get("trial_end_at", 0)
-                in_trial = bool(effective_is_paid and trial_end_at and int(time.time()) < trial_end_at)
-                username = profile.get("username", "")
-                if in_trial:
-                    add_trial_contact(email=email, name=username)
-                else:
-                    remove_contact_from_list(email=email, list_id=LIST_TRIAL)
-            except Exception as e:
-                logger.error("Failed to update trial list", extra={"email": email, "error": str(e)})
+        # if email:
+        #     try:
+        #         trial_end_at = profile.get("trial_end_at", 0)
+        #         in_trial = bool(effective_is_paid and trial_end_at and int(time.time()) < trial_end_at)
+        #         username = profile.get("username", "")
+        #         if in_trial:
+        #             add_trial_contact(email=email, name=username)
+        #         else:
+        #             remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+        #     except Exception as e:
+        #         logger.error("Failed to update trial list", extra={"email": email, "error": str(e)})
     else:
         logger.warning("No user profile found for subscription event", extra={"event": event, "subscription_id": subscription_id, "email": email})

@@ -1,6 +1,6 @@
 import time
 from fastapi import HTTPException, status, Depends
-from app.services.brevo.client import send_trial_ended_email, remove_contact_from_list, LIST_TRIAL
+from app.services.mail.client import send_trial_ended_email
 from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
@@ -100,7 +100,7 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
             user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
             try:
                 send_trial_ended_email(to_email=email)
-                remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+                # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
             except Exception:
                 pass
             send_trial_ended_whatsapp(email=email)
