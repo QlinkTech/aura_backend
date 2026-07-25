@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import Literal, Optional
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from app.utils.schema import CreateWhatsappTemplateModel, EditWhatsappTemplateModel, TriggerWhatsappCampaignModel
 from app.services.gupshup.client import create_template, list_templates, edit_template, delete_template, upload_template_media
-from app.services.db.whatsapp_campaign_utils import create_campaign, run_campaign, get_campaign, list_campaigns, list_personalization_fields, get_campaign_contacts
+from app.services.db.whatsapp_campaign_utils import (
+    create_campaign, run_campaign, send_campaign_messages, retry_campaign, get_campaign, list_campaigns,
+    list_personalization_fields, get_campaign_contacts, cancel_campaign,
+)
 from app.utils.logger_config import logger
 
 whatsapp_router = APIRouter()
@@ -128,9 +131,9 @@ def get_personalization_fields():
 
 @whatsapp_router.post("/whatsapp/campaigns")
 def trigger_campaign(payload: TriggerWhatsappCampaignModel, background_tasks: BackgroundTasks):
-    """Trigger a template-message campaign to all users or to specific engagement tiers. Sends run in the background."""
+    """Trigger a template-message campaign to all users or to specific engagement tiers. Sends run in the background, or later if scheduled_at is set."""
     try:
-        logger.info("System: triggering WhatsApp campaign", extra={"campaign_name": payload.name, "target": payload.target, "tiers": payload.tiers, "numbers": len(payload.numbers or [])})
+        logger.info("System: triggering WhatsApp campaign", extra={"campaign_name": payload.name, "target": payload.target, "tiers": payload.tiers, "numbers": len(payload.numbers or []), "scheduled_at": payload.scheduled_at})
         result = create_campaign(
             name=payload.name,
             template_id=payload.template_id,
@@ -141,13 +144,44 @@ def trigger_campaign(payload: TriggerWhatsappCampaignModel, background_tasks: Ba
             media_type=payload.media_type,
             media_url=payload.media_url,
             media_id=payload.media_id,
+            scheduled_at=payload.scheduled_at,
         )
-        background_tasks.add_task(run_campaign, result["campaign_id"])
+        if result["status"] != "scheduled":
+            background_tasks.add_task(run_campaign, result["campaign_id"])
         return {"success": True, **result}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("System: error triggering WhatsApp campaign", extra={"campaign_name": payload.name, "error": str(e)})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@whatsapp_router.delete("/whatsapp/campaigns/{campaign_id}")
+def cancel_campaign_route(campaign_id: str):
+    """Cancels a campaign that hasn't sent yet. Only valid while the campaign is still 'scheduled'."""
+    try:
+        logger.info("System: cancelling WhatsApp campaign", extra={"campaign_id": campaign_id})
+        return {"success": True, **cancel_campaign(campaign_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("System: error cancelling WhatsApp campaign", extra={"campaign_id": campaign_id, "error": str(e)})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@whatsapp_router.post("/whatsapp/campaigns/{campaign_id}/retry")
+def retry_campaign_route(campaign_id: str, filter: Literal["failed", "pending", "all"], background_tasks: BackgroundTasks):
+    """Re-attempts sending on a subset of a campaign's recipients: 'failed' (only ones that errored),
+    'pending' (never attempted, e.g. left over after an aborted run), or 'all' (both). Runs in the background."""
+    try:
+        logger.info("System: retrying WhatsApp campaign", extra={"campaign_id": campaign_id, "filter": filter})
+        result = retry_campaign(campaign_id, filter)
+        background_tasks.add_task(send_campaign_messages, campaign_id, result["statuses"])
+        return {"success": True, "campaign_id": result["campaign_id"], "filter": result["filter"], "retrying": result["retrying"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("System: error retrying WhatsApp campaign", extra={"campaign_id": campaign_id, "error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)
 
 

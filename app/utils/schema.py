@@ -124,6 +124,7 @@ class TriggerWhatsappCampaignModel(BaseModel):
     media_type: Optional[Literal["image", "video", "document"]] = None  # required for media templates
     media_url: Optional[str] = None  # public URL of the media (one of media_url/media_id required with media_type)
     media_id: Optional[str] = None   # Gupshup media id from a prior upload
+    scheduled_at: Optional[int] = None  # unix epoch seconds (not ms) to send later instead of immediately; omit/past to send now
 
 class EditWhatsappTemplateModel(BaseModel):
     content: Optional[str] = None

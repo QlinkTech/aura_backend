@@ -1,12 +1,31 @@
+import html
 import re
 import time
 from bson import ObjectId
 from fastapi import HTTPException, status
 from app.services.db.mongo_utils import user_profile, whatsapp_campaigns, whatsapp_campaign_messages
 from app.services.gupshup.client import send_template_message
+from app.services.mail.client import send_email
 from app.utils.logger_config import logger
 
 VALID_TIERS = {"daily", "high", "medium", "low", "inactive"}
+
+# Where scheduled-campaign poller failures get reported — not per-recipient send failures
+# (those are already tracked per-message in whatsapp_campaign_messages), only errors that
+# stop the poller/a scheduled run from completing at all.
+SCHEDULER_ALERT_EMAIL = "pratham@athams.com"
+
+
+def _alert_scheduler_error(context: str, error: str) -> None:
+    try:
+        send_email(
+            to_email=SCHEDULER_ALERT_EMAIL,
+            to_name="",
+            subject="WhatsApp scheduled campaign — poller error",
+            html_content=f"<p>{html.escape(context)}</p><pre>{html.escape(error)}</pre>",
+        )
+    except Exception as e:
+        logger.error("Failed to send scheduled-campaign error alert email", extra={"error": str(e)})
 
 # Fields a campaign param is allowed to pull from user_profile for per-recipient personalization.
 # Deliberately an allowlist, not "whatever's in params" — this data goes straight into a WhatsApp
@@ -105,7 +124,7 @@ def resolve_recipients(target: str, tiers: list = None, numbers: list = None, ex
 
 
 def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None, numbers: list = None,
-                    media_type: str = None, media_url: str = None, media_id: str = None) -> dict:
+                    media_type: str = None, media_url: str = None, media_id: str = None, scheduled_at: int = None) -> dict:
     if media_type and not (media_url or media_id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="media_url or media_id is required when media_type is set")
     if (media_url or media_id) and not media_type:
@@ -119,6 +138,7 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users with a phone number match this audience")
 
     now = int(time.time())
+    is_scheduled = bool(scheduled_at and scheduled_at > now)
     campaign_doc = {
         "name": name,
         "template_id": template_id,
@@ -130,7 +150,8 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
         "media_url": media_url,
         "media_id": media_id,
         "total_recipients": len(recipients),
-        "status": "processing",
+        "status": "scheduled" if is_scheduled else "processing",
+        "scheduled_at": scheduled_at if is_scheduled else None,
         "created_at": now,
         "completed_at": None,
     }
@@ -150,12 +171,30 @@ def create_campaign(name: str, template_id: str, params: list, target: str, tier
         for r in recipients
     ])
 
-    logger.info("WhatsApp campaign created", extra={"campaign_id": str(campaign_id), "campaign_name": name, "recipients": len(recipients)})
-    return {"campaign_id": str(campaign_id), "total_recipients": len(recipients)}
+    logger.info(
+        "WhatsApp campaign created",
+        extra={"campaign_id": str(campaign_id), "campaign_name": name, "recipients": len(recipients), "scheduled_at": scheduled_at if is_scheduled else None},
+    )
+    return {"campaign_id": str(campaign_id), "total_recipients": len(recipients), "status": campaign_doc["status"], "scheduled_at": campaign_doc["scheduled_at"]}
 
 
-def run_campaign(campaign_id: str) -> None:
-    """Sends the template to every pending recipient of a campaign. Runs as a background task."""
+# Consecutive send failures (no successes in between) that signal a systemic outage — e.g. Gupshup
+# itself down — rather than a handful of bad numbers. At that point we stop burning through the
+# rest of the recipient list (they're left "pending" for a later retry) instead of failing all of
+# them one by one and logging/alerting on every single one.
+CONSECUTIVE_FAILURE_ABORT_THRESHOLD = 5
+
+# What each retry filter re-attempts: only recipients that errored, only ones never attempted
+# (e.g. left over from an aborted run), or both.
+RETRY_FILTER_STATUSES = {
+    "failed": ["failed"],
+    "pending": ["pending"],
+    "all": ["failed", "pending"],
+}
+
+
+def send_campaign_messages(campaign_id: str, statuses: list) -> None:
+    """Sends the template to every message on this campaign whose current status is in `statuses`. Runs as a background task."""
     oid = ObjectId(campaign_id)
     campaign = whatsapp_campaigns.find_one({"_id": oid})
     if not campaign:
@@ -163,7 +202,10 @@ def run_campaign(campaign_id: str) -> None:
         return
 
     sent = failed = 0
-    for msg in whatsapp_campaign_messages.find({"campaign_id": oid, "status": "pending"}):
+    consecutive_failures = 0
+    last_error = None
+    aborted = False
+    for msg in whatsapp_campaign_messages.find({"campaign_id": oid, "status": {"$in": statuses}}):
         try:
             message_id = send_template_message(
                 phone_number=msg["phone"],
@@ -178,19 +220,112 @@ def run_campaign(campaign_id: str) -> None:
                 {"$set": {"gupshup_message_id": message_id, "status": "submitted", "updated_at": int(time.time())}},
             )
             sent += 1
+            consecutive_failures = 0
         except Exception as e:
             whatsapp_campaign_messages.update_one(
                 {"_id": msg["_id"]},
                 {"$set": {"status": "failed", "error": str(e), "updated_at": int(time.time())}},
             )
             failed += 1
+            consecutive_failures += 1
+            last_error = str(e)
             logger.error("Campaign message send failed", extra={"campaign_id": campaign_id, "email": msg["email"], "error": str(e)})
 
-    whatsapp_campaigns.update_one(
-        {"_id": oid},
-        {"$set": {"status": "completed", "completed_at": int(time.time())}},
+            if consecutive_failures >= CONSECUTIVE_FAILURE_ABORT_THRESHOLD:
+                aborted = True
+                break
+
+    if aborted:
+        whatsapp_campaigns.update_one({"_id": oid}, {"$set": {"status": "failed", "completed_at": int(time.time())}})
+        logger.error("WhatsApp campaign aborted after consecutive failures", extra={"campaign_id": campaign_id, "submitted": sent, "failed": failed, "last_error": last_error})
+        _alert_scheduler_error(
+            f"Campaign {campaign_id} ({campaign.get('name')}) aborted after {consecutive_failures} consecutive send failures "
+            f"— likely a Gupshup outage rather than bad numbers. Sent: {sent}, failed: {failed}, remaining recipients left pending for retry.",
+            last_error or "unknown error",
+        )
+        return
+
+    # Only "completed" once nothing is left untried — a filtered retry (e.g. filter="failed" while
+    # some recipients are still "pending" from an earlier abort) leaves the campaign's status as-is,
+    # since there's still work outstanding.
+    remaining_pending = whatsapp_campaign_messages.count_documents({"campaign_id": oid, "status": "pending"})
+    if remaining_pending == 0 and campaign.get("status") != "completed":
+        whatsapp_campaigns.update_one({"_id": oid}, {"$set": {"status": "completed", "completed_at": int(time.time())}})
+    logger.info("WhatsApp campaign run finished", extra={"campaign_id": campaign_id, "submitted": sent, "failed": failed, "remaining_pending": remaining_pending})
+
+
+def run_campaign(campaign_id: str) -> None:
+    """Sends the template to every never-yet-attempted recipient of a campaign. Runs as a background task."""
+    send_campaign_messages(campaign_id, statuses=["pending"])
+
+
+def retry_campaign(campaign_id: str, filter: str) -> dict:
+    """Validates a retry request and reports how many messages match. filter: 'failed', 'pending', or 'all'."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid campaign id")
+
+    if not whatsapp_campaigns.find_one({"_id": oid}, {"_id": 1}):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    statuses = RETRY_FILTER_STATUSES.get(filter)
+    if not statuses:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"filter must be one of: {', '.join(RETRY_FILTER_STATUSES)}")
+
+    count = whatsapp_campaign_messages.count_documents({"campaign_id": oid, "status": {"$in": statuses}})
+    if count == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"No messages with status in {statuses} to retry")
+
+    logger.info("Retrying WhatsApp campaign messages", extra={"campaign_id": campaign_id, "filter": filter, "count": count})
+    return {"campaign_id": campaign_id, "filter": filter, "retrying": count, "statuses": statuses}
+
+
+def run_due_scheduled_campaigns() -> None:
+    """Claims every scheduled campaign whose time has come and runs it. Called every minute by the APScheduler poller."""
+    try:
+        now = int(time.time())
+        while True:
+            # find_one_and_update makes the claim atomic, so two pollers (e.g. during a rolling deploy) can't both grab the same campaign
+            campaign = whatsapp_campaigns.find_one_and_update(
+                {"status": "scheduled", "scheduled_at": {"$lte": now}},
+                {"$set": {"status": "processing"}},
+            )
+            if not campaign:
+                break
+            campaign_id = str(campaign["_id"])
+            logger.info("Running scheduled WhatsApp campaign", extra={"campaign_id": campaign_id, "scheduled_at": campaign.get("scheduled_at")})
+            try:
+                run_campaign(campaign_id)
+            except Exception as e:
+                logger.error("Scheduled WhatsApp campaign run failed", extra={"campaign_id": campaign_id, "error": str(e)})
+                _alert_scheduler_error(f"Scheduled campaign {campaign_id} failed to run.", str(e))
+    except Exception as e:
+        # Claim/query itself failed (e.g. DB unreachable) — the loop never got to a specific campaign
+        logger.error("WhatsApp scheduled-campaign poller failed", extra={"error": str(e)})
+        _alert_scheduler_error("The WhatsApp scheduled-campaign poller failed to run.", str(e))
+
+
+def cancel_campaign(campaign_id: str) -> dict:
+    """Cancels a campaign that hasn't sent yet. Only valid while status is still 'scheduled'."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid campaign id")
+
+    campaign = whatsapp_campaigns.find_one_and_update(
+        {"_id": oid, "status": "scheduled"},
+        {"$set": {"status": "cancelled", "completed_at": int(time.time())}},
     )
-    logger.info("WhatsApp campaign run finished", extra={"campaign_id": campaign_id, "submitted": sent, "failed": failed})
+    if not campaign:
+        existing = whatsapp_campaigns.find_one({"_id": oid}, {"status": 1})
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot cancel a campaign with status '{existing['status']}'")
+
+    whatsapp_campaign_messages.update_many({"campaign_id": oid, "status": "pending"}, {"$set": {"status": "cancelled", "updated_at": int(time.time())}})
+    logger.info("WhatsApp campaign cancelled", extra={"campaign_id": campaign_id})
+    return {"campaign_id": campaign_id, "status": "cancelled"}
 
 
 def _stats_for(campaign_oid: ObjectId) -> dict:
