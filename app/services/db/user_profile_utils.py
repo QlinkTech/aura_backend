@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 from app.services.db.mongo_utils import user_profile, password_reset_tokens
-from app.services.auth_service import hash_password, verify_password, create_access_token
+from app.services.auth_service import hash_password, verify_password, create_access_token, USER_ACCESS_TOKEN_EXPIRE_MINUTES
 from app.services.mail.client import send_account_created_email, send_reset_password_email, send_trial_ended_email
 from app.services.gupshup.lifecycle import send_trial_ended_whatsapp
 from app.utils.env_load import frontend_url, google_client_id, google_client_secret
@@ -53,7 +53,7 @@ def create_account(email: str, password: str, user_name: str, phone: str = ""):
                 "updated_at": int(time.time())
             })
 
-        token = create_access_token({"sub": email, "email": email})
+        token = create_access_token({"sub": email, "email": email}, expires_minutes=USER_ACCESS_TOKEN_EXPIRE_MINUTES)
         logger.info("Account created successfully", extra={"email": email})
 
         try:
@@ -134,7 +134,7 @@ def google_login(id_token: str):
             except Exception as e:
                 logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
 
-        token = create_access_token({"sub": email, "email": email})
+        token = create_access_token({"sub": email, "email": email}, expires_minutes=USER_ACCESS_TOKEN_EXPIRE_MINUTES)
         return {
             "access_token": token,
             "token_type": "bearer",
@@ -239,7 +239,7 @@ def google_code_login(code: str, redirect_uri: str):
             except Exception as e:
                 logger.error("Failed to send account created email", extra={"email": email, "error": str(e)})
 
-        token = create_access_token({"sub": email, "email": email})
+        token = create_access_token({"sub": email, "email": email}, expires_minutes=USER_ACCESS_TOKEN_EXPIRE_MINUTES)
         return {
             "access_token": token,
             "token_type": "bearer",
@@ -279,7 +279,7 @@ def login(email: str, password: str):
                     logger.error("Failed to send trial ended email at login", extra={"email": email, "error": str(e)})
                 send_trial_ended_whatsapp(email=email)
 
-        token = create_access_token({"sub": email, "email": email})
+        token = create_access_token({"sub": email, "email": email}, expires_minutes=USER_ACCESS_TOKEN_EXPIRE_MINUTES)
         logger.info("Login successful", extra={"email": email})
         return {"access_token": token, "token_type": "bearer", "phone_verified": bool(user.get("phone_verified", False))}
     except HTTPException:

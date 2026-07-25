@@ -107,6 +107,10 @@ class CreateWhatsappTemplateModel(BaseModel):
     message_send_ttl_seconds: Optional[int] = None
     is_cpr: Optional[bool] = None
     parameter_format: Optional[Literal["NAMED", "POSITIONAL"]] = None
+    # Not sent to Gupshup — stored ourselves and auto-applied as media_type/media_url when a campaign
+    # is later triggered for this template, so callers don't need to resupply media every send.
+    send_media_type: Optional[Literal["image", "video", "document"]] = None
+    send_media_url: Optional[str] = None
 
 class CampaignFieldParam(BaseModel):
     field: str            # user_profile field to pull per-recipient, e.g. "username"
@@ -139,3 +143,7 @@ class EditWhatsappTemplateModel(BaseModel):
     media_id: Optional[str] = None
     media_url: Optional[str] = None
     category: Optional[Literal["AUTHENTICATION", "MARKETING", "UTILITY"]] = None
+    # Not sent to Gupshup — stored ourselves and auto-applied as media_type/media_url when a campaign
+    # is later triggered for this template, so callers don't need to resupply media every send.
+    send_media_type: Optional[Literal["image", "video", "document"]] = None
+    send_media_url: Optional[str] = None

@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from app.services.db.mongo_utils import user_profile, whatsapp_campaigns, whatsapp_campaign_messages
 from app.services.gupshup.client import send_template_message
 from app.services.mail.client import send_email
+from app.services.db.whatsapp_template_utils import get_template_media
 from app.utils.logger_config import logger
 
 VALID_TIERS = {"daily", "high", "medium", "low", "inactive"}
@@ -125,6 +126,14 @@ def resolve_recipients(target: str, tiers: list = None, numbers: list = None, ex
 
 def create_campaign(name: str, template_id: str, params: list, target: str, tiers: list = None, numbers: list = None,
                     media_type: str = None, media_url: str = None, media_id: str = None, scheduled_at: int = None) -> dict:
+    # No media given at all — fall back to whatever was stored for this template when it was created/edited,
+    # so callers don't have to resupply media_type/media_url on every single trigger.
+    if not media_type and not media_url and not media_id:
+        default_media = get_template_media(template_id)
+        if default_media:
+            media_type = default_media.get("media_type")
+            media_url = default_media.get("media_url")
+
     if media_type and not (media_url or media_id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="media_url or media_id is required when media_type is set")
     if (media_url or media_id) and not media_type:

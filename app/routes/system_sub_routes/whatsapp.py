@@ -1,4 +1,6 @@
+from io import BytesIO
 from typing import Literal, Optional
+from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from app.utils.schema import CreateWhatsappTemplateModel, EditWhatsappTemplateModel, TriggerWhatsappCampaignModel
@@ -7,17 +9,83 @@ from app.services.db.whatsapp_campaign_utils import (
     create_campaign, run_campaign, send_campaign_messages, retry_campaign, get_campaign, list_campaigns,
     list_personalization_fields, get_campaign_contacts, cancel_campaign,
 )
+from app.services.db.whatsapp_template_utils import save_template_media
+from app.services.storage.r2_utils import upload_media as upload_media_to_r2
 from app.utils.logger_config import logger
 
 whatsapp_router = APIRouter()
 
+_MEDIA_TYPE_BY_MIME_PREFIX = {"image": "image", "video": "video"}
+
+
+def _infer_media_type(mime_type: str) -> str:
+    """Maps a MIME type to our media_type literal: image/video pass through, everything else (pdf, etc.) is 'document'."""
+    return _MEDIA_TYPE_BY_MIME_PREFIX.get((mime_type or "").split("/")[0], "document")
+
+
+def _upload_and_host_media(file_type: str, file: Optional[UploadFile], file_url: Optional[str]) -> dict:
+    """Uploads media to Gupshup (handleId for template-submission preview) and keeps a permanent copy
+    in R2 (media_url for later sends). Shared by the template create/edit routes and the standalone
+    upload endpoint so there's one place that does this, not three."""
+    file_bytes = file.file.read() if file else None
+    gupshup_result = upload_template_media(
+        file_type=file_type,
+        file_bytes=file_bytes,
+        filename=file.filename if file else None,
+        content_type=file.content_type if file else None,
+        file_url=file_url,
+    )
+
+    if file_bytes:
+        key = f"whatsapp-templates/{uuid4().hex}_{file.filename or 'upload'}"
+        media_url = upload_media_to_r2(BytesIO(file_bytes), key, content_type=file.content_type or file_type)
+    else:
+        media_url = file_url  # already a public URL — nothing to host ourselves
+
+    return {
+        "gupshup_result": gupshup_result,
+        "handle_id": gupshup_result.get("handleId"),
+        "media_url": media_url,
+        "media_type": _infer_media_type(file_type),
+    }
+
 
 @whatsapp_router.post("/whatsapp/templates")
-def apply_for_template(payload: CreateWhatsappTemplateModel):
-    """Apply for (create) a new WhatsApp message template via the Gupshup Partner API."""
+def apply_for_template(
+    template: str = Form(..., description="JSON-encoded CreateWhatsappTemplateModel fields"),
+    file_type: Optional[str] = Form(None, description='MIME type, e.g. "image/png" — required if file/file_url is given'),
+    file: Optional[UploadFile] = File(None),
+    file_url: Optional[str] = Form(None),
+):
+    """Apply for (create) a new WhatsApp message template via the Gupshup Partner API.
+
+    Pass a media 'file' or 'file_url' to have it uploaded to Gupshup (as the approval-preview handle)
+    and hosted in R2 (as send_media_url) in this same call — no separate /whatsapp/templates/media
+    round trip needed. If the template already has send_media_type/send_media_url set directly in
+    the JSON body instead, that's used as-is and no upload happens."""
+    try:
+        payload = CreateWhatsappTemplateModel.model_validate_json(template)
+    except Exception as e:
+        return JSONResponse({"error": f"Invalid 'template' JSON: {e}"}, status_code=400)
+
     try:
         logger.info("System: applying for WhatsApp template", extra={"element_name": payload.element_name, "category": payload.category})
+
+        if file or file_url:
+            if not file_type:
+                return JSONResponse({"error": "file_type is required when 'file' or 'file_url' is provided"}, status_code=400)
+            media = _upload_and_host_media(file_type, file, file_url)
+            payload.example_media = media["handle_id"]
+            payload.send_media_type = media["media_type"]
+            payload.send_media_url = media["media_url"]
+
         result = create_template(payload)
+
+        if payload.send_media_type and payload.send_media_url:
+            new_template_id = result.get("template", {}).get("id")
+            if new_template_id:
+                save_template_media(new_template_id, payload.send_media_type, payload.send_media_url, element_name=payload.element_name)
+
         return {"success": True, **result}
     except HTTPException:
         raise
@@ -63,11 +131,39 @@ def get_templates(
 
 
 @whatsapp_router.put("/whatsapp/templates/{template_id}")
-def update_template(template_id: str, payload: EditWhatsappTemplateModel):
-    """Edit an existing WhatsApp template by templateId via the Gupshup Partner API."""
+def update_template(
+    template_id: str,
+    template: str = Form(..., description="JSON-encoded EditWhatsappTemplateModel fields"),
+    file_type: Optional[str] = Form(None, description='MIME type, e.g. "image/png" — required if file/file_url is given'),
+    file: Optional[UploadFile] = File(None),
+    file_url: Optional[str] = Form(None),
+):
+    """Edit an existing WhatsApp template by templateId via the Gupshup Partner API.
+
+    Pass a media 'file' or 'file_url' to have it uploaded to Gupshup and hosted in R2 (as
+    send_media_url) in this same call — see apply_for_template for the same pattern on create."""
+    try:
+        payload = EditWhatsappTemplateModel.model_validate_json(template)
+    except Exception as e:
+        return JSONResponse({"error": f"Invalid 'template' JSON: {e}"}, status_code=400)
+
     try:
         logger.info("System: editing WhatsApp template", extra={"template_id": template_id})
+
+        if file or file_url:
+            if not file_type:
+                return JSONResponse({"error": "file_type is required when 'file' or 'file_url' is provided"}, status_code=400)
+            media = _upload_and_host_media(file_type, file, file_url)
+            payload.example_media = media["handle_id"]
+            payload.send_media_type = media["media_type"]
+            payload.send_media_url = media["media_url"]
+
         result = edit_template(template_id, payload)
+
+        if payload.send_media_type and payload.send_media_url:
+            element_name = result.get("template", {}).get("elementName")
+            save_template_media(template_id, payload.send_media_type, payload.send_media_url, element_name=element_name)
+
         return {"success": True, **result}
     except HTTPException:
         raise
@@ -96,20 +192,16 @@ def upload_media(
     file: Optional[UploadFile] = File(None),
     file_url: Optional[str] = Form(None),
 ):
-    """Upload sample media for a template, returning a handleId to pass as example_media when applying for a template."""
+    """Standalone media upload — usually unnecessary now since POST/PUT /whatsapp/templates accept a
+    file/file_url directly and do this internally. Kept for previewing/hosting media before deciding
+    on a template. Returns a handleId (example_media) and a permanent media_url (send_media_url)."""
     try:
         if not file and not file_url:
             return JSONResponse({"error": "Either 'file' or 'file_url' must be provided"}, status_code=400)
 
         logger.info("System: uploading WhatsApp template media", extra={"file_type": file_type, "via_url": bool(file_url)})
-        result = upload_template_media(
-            file_type=file_type,
-            file_bytes=file.file.read() if file else None,
-            filename=file.filename if file else None,
-            content_type=file.content_type if file else None,
-            file_url=file_url,
-        )
-        return {"success": True, **result}
+        media = _upload_and_host_media(file_type, file, file_url)
+        return {"success": True, **media["gupshup_result"], "media_url": media["media_url"]}
     except HTTPException:
         raise
     except Exception as e:
