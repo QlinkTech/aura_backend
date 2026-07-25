@@ -42,9 +42,12 @@ def _upload_and_host_media(file_type: str, file: Optional[UploadFile], file_url:
     else:
         media_url = file_url  # already a public URL — nothing to host ourselves
 
+    # Gupshup nests the actual handle string a level deeper: {"handleId": {"message": "4::..."}}
+    handle_id = (gupshup_result.get("handleId") or {}).get("message")
+
     return {
         "gupshup_result": gupshup_result,
-        "handle_id": gupshup_result.get("handleId"),
+        "handle_id": handle_id,
         "media_url": media_url,
         "media_type": _infer_media_type(file_type),
     }
