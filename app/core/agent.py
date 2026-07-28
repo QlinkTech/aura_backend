@@ -16,7 +16,7 @@ from app.utils.logger_config import logger
 import json
 
 from app.utils.env_load import openai_api_key
-from app.core.agent_utils import system_prompt, tools
+from app.core.agent_utils import system_prompt, tools, TOOL_GROUNDING_INSTRUCTIONS, APP_FEATURE_REFERRAL_INSTRUCTIONS
 
 openai_client = OpenAI(
     api_key=openai_api_key
@@ -244,6 +244,8 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         user_context = f"The user's name is {username}. " if username else ""
         messages = [
             {"role": "system", "content": mmd_system_prompt},
+            {"role": "system", "content": TOOL_GROUNDING_INSTRUCTIONS},
+            {"role": "system", "content": APP_FEATURE_REFERRAL_INSTRUCTIONS},
             {"role": "system", "content": user_context.strip()},
             *history_for_model,
             {"role": "user", "content": message},
@@ -253,7 +255,7 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         kb_references = []
         for iteration in range(MAX_TOOL_ITERATIONS):
             response = openai_client.chat.completions.create(
-                model="gpt-4.1-mini",
+                model="gpt-5-mini",
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
@@ -266,41 +268,49 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
                 reply = result.message.content
                 break
 
-            tool_call = result.message.tool_calls[0]
-            func_name = tool_call.function.name
-            func_args = json.loads(tool_call.function.arguments)
-
-            logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
-
-            if func_name == "search_knowledge_base":
-                kb_chunks = get_kb_context(func_args["query"], k=3)
-                if kb_chunks:
-                    kb_references.extend([c for c in kb_chunks.split("\n") if c.strip()])
-                tool_result_content = json.dumps({"knowledge_base": kb_chunks})
-            elif func_name == "get_memory":
-                tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
-            elif func_name == "update_memory":
-                update_memory(email, func_args["memory"])
-                tool_result_content = f"Memory stored successfully: {func_args['memory']}"
-            elif func_name == "get_journal_context":
-                tool_result_content = json.dumps(get_journal_context(email, func_args["query"]))
-            else:
-                logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
-                break
-
+            tool_calls = result.message.tool_calls
+            # Every tool_call the model makes in this turn must get a matching "tool" response
+            # below, or the next request to OpenAI errors — so the assistant message here has to
+            # list all of them, not just the first one.
             messages.append({
                 "role": "assistant",
-                "tool_calls": [{
-                    "id": tool_call.id,
-                    "type": "function",
-                    "function": {"name": func_name, "arguments": json.dumps(func_args)}
-                }]
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in tool_calls
+                ],
             })
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": tool_result_content
-            })
+
+            for tool_call in tool_calls:
+                func_name = tool_call.function.name
+                func_args = json.loads(tool_call.function.arguments)
+
+                logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
+
+                if func_name == "search_knowledge_base":
+                    kb_chunks = get_kb_context(func_args["query"], k=3)
+                    if kb_chunks:
+                        kb_references.extend([c for c in kb_chunks.split("\n") if c.strip()])
+                    tool_result_content = json.dumps({"knowledge_base": kb_chunks})
+                elif func_name == "get_memory":
+                    tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
+                elif func_name == "update_memory":
+                    update_memory(email, func_args["memory"])
+                    tool_result_content = f"Memory stored successfully: {func_args['memory']}"
+                elif func_name == "get_journal_context":
+                    tool_result_content = json.dumps(get_journal_context(email, func_args["query"]))
+                else:
+                    logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
+                    tool_result_content = json.dumps({"error": f"Unknown tool '{func_name}'"})
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": tool_result_content
+                })
 
         if not reply:
             logger.warning("Agent loop exhausted without reply", extra={"email": email})
