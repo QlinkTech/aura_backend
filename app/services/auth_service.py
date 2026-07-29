@@ -11,6 +11,7 @@ import os
 from app.services.db.mongo_utils import user_profile
 
 from app.utils.env_load import secret_key
+from app.utils.logger_config import logger
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = secret_key
@@ -33,6 +34,40 @@ def create_access_token(data, expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES):
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 _ACTIVE_SUBSCRIPTION_STATUSES = {"active", "completed", "authenticated"}
+_LAPSED_SUBSCRIPTION_STATUSES = {"cancelled", "paused", "free"}
+
+
+def revoke_access_if_lapsed(email: str, user: dict) -> bool:
+    """Lazily revoke is_paid for a cancelled-mid-trial / free-plan user whose window has passed.
+
+    Shared by get_active_user and every auth entry point (login, google_login,
+    google_code_login) so access is judged identically on every request.
+    Returns True if access was revoked.
+    """
+    if user.get("is_bypassed") or not user.get("is_paid"):
+        return False
+    if user.get("subscription_status") not in _LAPSED_SUBSCRIPTION_STATUSES:
+        return False
+
+    now = int(time.time())
+    paid_until = user.get("paid_until", 0)
+    # A cancelled/paused/free status doesn't end access early if a paid-up period
+    # (e.g. cancel-at-cycle-end) is still running — status means "won't renew".
+    if paid_until and now < paid_until:
+        return False
+    if now < user.get("trial_end_at", 0):
+        return False
+
+    user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": now}})
+    logger.info("Trial/free plan expired — access revoked", extra={"email": email})
+    try:
+        send_trial_ended_email(to_email=email)
+        # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
+    except Exception as e:
+        logger.error("Failed to send trial ended email", extra={"email": email, "error": str(e)})
+    send_trial_ended_whatsapp(email=email)
+    return True
+
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
@@ -95,23 +130,12 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
     if user.get("is_bypassed"):
         return current_user
 
+    if revoke_access_if_lapsed(email, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
+
     now = int(time.time())
     paid_until = user.get("paid_until", 0)
-    # A cancelled/paused/free status doesn't end access early if a paid-up period
-    # (e.g. cancel-at-cycle-end) is still running — status means "won't renew".
     still_within_paid_period = bool(paid_until and now < paid_until)
-
-    # Lazily revoke access for cancelled-mid-trial and free-plan users once their window passes
-    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free") and not still_within_paid_period:
-        if now >= user.get("trial_end_at", 0):
-            user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": now}})
-            try:
-                send_trial_ended_email(to_email=email)
-                # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
-            except Exception:
-                pass
-            send_trial_ended_whatsapp(email=email)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
 
     if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES or still_within_paid_period:
         return current_user
