@@ -1,8 +1,11 @@
 import hmac
 import hashlib
+import time
 from fastapi import APIRouter, Request, HTTPException, status, Security
 from fastapi.security import APIKeyHeader
+from pymongo.errors import DuplicateKeyError
 from app.utils.env_load import razorpay_webhook_secret, admin_api_key
+from app.services.db.mongo_utils import webhook_events
 from app.services.db.razorpay_utils import (
     save_payment_captured,
     save_payment_failed,
@@ -44,6 +47,17 @@ def _verify_signature(body: bytes, signature: str) -> bool:
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def _webhook_event_key(event: str, payload: dict) -> str:
+    entity = payload.get("payload", {})
+    if event in ("payment.captured", "payment.authorized", "payment.failed"):
+        obj = entity.get("payment", {}).get("entity", {})
+    else:
+        obj = entity.get("subscription", {}).get("entity", {})
+    # Razorpay redelivers the identical payload (including created_at) on retry,
+    # so this triple is stable across retries but distinct across genuinely new events.
+    return f"{event}:{obj.get('id', '')}:{payload.get('created_at', '')}"
 
 
 @payment_router.post("/early-bird-subscription", dependencies=[Security(_verify_api_key)])
@@ -101,6 +115,14 @@ async def razorpay_webhook(request: Request):
     logger.info("Recevied Webhook Data", extra={"data": payload})
     event = payload.get("event")
     entity = payload.get("payload", {})
+    event_created_at = payload.get("created_at")
+
+    event_key = _webhook_event_key(event, payload)
+    try:
+        webhook_events.insert_one({"event_key": event_key, "event": event, "received_at": int(time.time())})
+    except DuplicateKeyError:
+        logger.info("Duplicate webhook delivery ignored", extra={"event_key": event_key})
+        return {"status": "duplicate"}
 
     if event in ("payment.captured", "payment.authorized"):
         payment = entity.get("payment", {}).get("entity", {})
@@ -112,6 +134,6 @@ async def razorpay_webhook(request: Request):
 
     elif event in SUBSCRIPTION_EVENTS:
         subscription = entity.get("subscription", {}).get("entity", {})
-        save_subscription_event(event, subscription)
+        save_subscription_event(event, subscription, event_created_at=event_created_at)
 
     return {"status": "ok"}

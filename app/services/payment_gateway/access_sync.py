@@ -31,16 +31,24 @@ def _compute_is_paid(user_doc: dict, now: int) -> bool:
     is_paid = user_doc.get("is_paid", False)
     sub_status = user_doc.get("subscription_status")
     trial_end_at = user_doc.get("trial_end_at", 0)
+    paid_until = user_doc.get("paid_until", 0)
 
     if not is_paid:
         # Self-heal: should be paid but isn't (missed webhook, active trial never picked up).
         if trial_end_at and now < trial_end_at:
+            return True
+        if paid_until and now < paid_until:
             return True
         if sub_status in _ACTIVE_SUBSCRIPTION_STATUSES:
             return True
         return False
 
     # is_paid is currently True — only revoke on a trusted signal.
+    # A cancelled/halted status doesn't end access early if a paid-up period is
+    # still running (e.g. cancel-at-cycle-end) — status means "won't renew", not
+    # "access ends now".
+    if paid_until and now < paid_until:
+        return True
     if sub_status in _LAPSED_SUBSCRIPTION_STATUSES and now >= trial_end_at:
         return False
     if _is_orphaned_grant(user_doc):
@@ -59,7 +67,7 @@ def sync_access_status():
     updated = 0
     for user_doc in user_profile.find(
         {},
-        {"email": 1, "is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1, "early_bird_sub_id": 1},
+        {"email": 1, "is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1, "early_bird_sub_id": 1, "paid_until": 1},
     ):
         old_is_paid = user_doc.get("is_paid", False)
         new_is_paid = _compute_is_paid(user_doc, now)

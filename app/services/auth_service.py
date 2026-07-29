@@ -88,17 +88,23 @@ def get_system_user(token: str = Depends(oauth2_scheme)):
 
 def get_active_user(current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
-    user = user_profile.find_one({"email": email}, {"is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1})
+    user = user_profile.find_one({"email": email}, {"is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1, "paid_until": 1})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if user.get("is_bypassed"):
         return current_user
 
+    now = int(time.time())
+    paid_until = user.get("paid_until", 0)
+    # A cancelled/paused/free status doesn't end access early if a paid-up period
+    # (e.g. cancel-at-cycle-end) is still running — status means "won't renew".
+    still_within_paid_period = bool(paid_until and now < paid_until)
+
     # Lazily revoke access for cancelled-mid-trial and free-plan users once their window passes
-    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
-        if int(time.time()) >= user.get("trial_end_at", 0):
-            user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
+    if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free") and not still_within_paid_period:
+        if now >= user.get("trial_end_at", 0):
+            user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": now}})
             try:
                 send_trial_ended_email(to_email=email)
                 # remove_contact_from_list(email=email, list_id=LIST_TRIAL)
@@ -107,6 +113,6 @@ def get_active_user(current_user: dict = Depends(get_current_user)):
             send_trial_ended_whatsapp(email=email)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")
 
-    if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES:
+    if user.get("is_paid") or user.get("subscription_status") in _ACTIVE_SUBSCRIPTION_STATUSES or still_within_paid_period:
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active subscription required")

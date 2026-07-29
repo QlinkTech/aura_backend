@@ -5,6 +5,7 @@ from app.services.mail.client import (
     send_welcome_email, send_thank_you_email,
     send_subscription_cancelled_email,
 )
+from app.services.payment_gateway.client import gateway_client, fetch_subscription
 
 
 
@@ -14,6 +15,7 @@ def save_payment_captured(payment: dict):
     amount = payment.get("amount", 0)   # paise
     currency = payment.get("currency", "INR")
     order_id = payment.get("order_id")
+    invoice_id = payment.get("invoice_id")
 
     logger.info("Saving captured payment", extra={"payment_id": payment_id, "email": email, "amount": amount, "currency": currency})
 
@@ -36,6 +38,47 @@ def save_payment_captured(payment: dict):
         )
         logger.info("User marked as paid", extra={"email": email})
 
+    # A capture can arrive after a stale/superseded subscription.cancelled webhook
+    # already froze subscription_status — pull live status straight from Razorpay
+    # so a real payment can never sit behind a wrong "cancelled" flag.
+    if invoice_id:
+        _reconcile_subscription_from_invoice(invoice_id, email)
+
+
+def _reconcile_subscription_from_invoice(invoice_id: str, email: str):
+    try:
+        invoice = gateway_client.invoice.fetch(invoice_id)
+        subscription_id = invoice.get("subscription_id")
+        if not subscription_id:
+            return
+
+        sub = fetch_subscription(subscription_id)
+        resolved_status = sub.get("status")
+        current_end = sub.get("current_end")
+
+        profile = user_profile.find_one({"early_bird_sub_id": subscription_id})
+        if profile is None and email:
+            profile = user_profile.find_one({"email": email})
+        if not profile:
+            return
+
+        update_fields = {
+            "subscription_status": resolved_status,
+            "is_paid": True,
+            "early_bird_sub_id": subscription_id,
+            "updated_at": int(time.time()),
+        }
+        if current_end:
+            update_fields["paid_until"] = current_end
+
+        user_profile.update_one({"_id": profile["_id"]}, {"$set": update_fields})
+        logger.info(
+            "Subscription status reconciled from captured payment",
+            extra={"subscription_id": subscription_id, "status": resolved_status, "paid_until": current_end},
+        )
+    except Exception as e:
+        logger.error("Failed to reconcile subscription from invoice", extra={"invoice_id": invoice_id, "error": str(e)})
+
 
 def save_payment_failed(payment: dict):
     payment_id = payment.get("id")
@@ -53,7 +96,7 @@ def save_payment_failed(payment: dict):
     })
 
 
-def save_subscription_event(event: str, subscription: dict):
+def save_subscription_event(event: str, subscription: dict, event_created_at: int = None):
     subscription_id = subscription.get("id")
     email = (
         subscription.get("customer_email")
@@ -63,6 +106,16 @@ def save_subscription_event(event: str, subscription: dict):
     ).lower()
 
     logger.info("Saving subscription event", extra={"event": event, "subscription_id": subscription_id, "email": email})
+
+    if subscription_id and event_created_at:
+        existing_event = payments.find_one({"subscription_id": subscription_id}, {"event_created_at": 1})
+        last_applied = existing_event.get("event_created_at") if existing_event else None
+        if last_applied and event_created_at < last_applied:
+            logger.warning(
+                "Ignoring stale/out-of-order subscription webhook",
+                extra={"event": event, "subscription_id": subscription_id, "event_created_at": event_created_at, "last_applied": last_applied},
+            )
+            return
 
     status_map = {
         "subscription.authenticated": "active",
@@ -85,15 +138,19 @@ def save_subscription_event(event: str, subscription: dict):
         "subscription.pending",  # keep access during retry window, revoke only on halted
     )
 
+    subscription_set_fields = {
+        "email": email,
+        "status": resolved_status,
+        "event": event,
+        "raw": subscription,
+        "updated_at": int(time.time()),
+    }
+    if event_created_at:
+        subscription_set_fields["event_created_at"] = event_created_at
+
     payments.update_one(
         {"subscription_id": subscription_id},
-        {"$set": {
-            "email": email,
-            "status": resolved_status,
-            "event": event,
-            "raw": subscription,
-            "updated_at": int(time.time()),
-        }, "$setOnInsert": {
+        {"$set": subscription_set_fields, "$setOnInsert": {
             "created_at": int(time.time()),
         }},
         upsert=True
@@ -108,16 +165,23 @@ def save_subscription_event(event: str, subscription: dict):
         profile = user_profile.find_one({"email": email})
 
     if profile:
+        paid_until = subscription.get("current_end")
         effective_is_paid = is_paid
-        if event in ("subscription.cancelled", "subscription.paused"):
+        if not effective_is_paid:
             trial_end_at = profile.get("trial_end_at", 0)
-            effective_is_paid = int(time.time()) < trial_end_at
+            now = int(time.time())
+            # A lapsing event (cancelled/halted/paused/...) doesn't end access early —
+            # it means "won't renew", not "access ends now". Access still runs through
+            # whatever's already been paid for.
+            effective_is_paid = now < trial_end_at or bool(paid_until and now < paid_until)
 
         update_fields = {
             "subscription_status": resolved_status,
             "is_paid": effective_is_paid,
             "updated_at": int(time.time()),
         }
+        if paid_until:
+            update_fields["paid_until"] = paid_until
         # Keep early_bird_sub_id pointing to the active subscription
         if effective_is_paid:
             update_fields["early_bird_sub_id"] = subscription_id

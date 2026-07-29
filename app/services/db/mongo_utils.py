@@ -20,6 +20,8 @@ phone_otps = db["phone_otps"]
 whatsapp_campaigns = db["whatsapp_campaigns"]
 whatsapp_campaign_messages = db["whatsapp_campaign_messages"]
 whatsapp_template_media = db["whatsapp_template_media"]
+webhook_events = db["webhook_events"]
+webhook_events.create_index("event_key", unique=True)
 
 
 def return_system_prompt():
