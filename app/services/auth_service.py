@@ -34,7 +34,7 @@ def create_access_token(data, expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES):
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 _ACTIVE_SUBSCRIPTION_STATUSES = {"active", "completed", "authenticated"}
-_LAPSED_SUBSCRIPTION_STATUSES = {"cancelled", "paused", "free"}
+_LAPSED_SUBSCRIPTION_STATUSES = {"cancelled", "paused", "free", "expired", "halted"}
 
 
 def revoke_access_if_lapsed(email: str, user: dict) -> bool:

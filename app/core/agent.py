@@ -14,15 +14,180 @@ from app.services.db.chat_session_utils import (
 from app.services.db.journal_utils import get_journal_logs
 from app.utils.logger_config import logger
 import json
+import time
 
 from app.utils.env_load import openai_api_key
-from app.core.agent_utils import system_prompt, tools, TOOL_GROUNDING_INSTRUCTIONS, APP_FEATURE_REFERRAL_INSTRUCTIONS
+from app.core.agent_utils import (
+    system_prompt,
+    tools,
+    TOOL_GROUNDING_INSTRUCTIONS,
+    APP_FEATURE_REFERRAL_INSTRUCTIONS,
+    KB_USAGE_INSTRUCTIONS,
+    RESPONSE_STYLE_INSTRUCTIONS,
+)
 
 openai_client = OpenAI(
     api_key=openai_api_key
 )
 
 _title_executor = ThreadPoolExecutor(max_workers=2)
+# Tool reads within a single model turn are independent (each is an embedding call + a Pinecone
+# query), so they run concurrently instead of serially — a 3-tool turn costs one tool's latency.
+_tool_executor = ThreadPoolExecutor(max_workers=8)
+# Separate pool for fire-and-forget writes, so a burst of them can't starve the reads above.
+_bg_executor = ThreadPoolExecutor(max_workers=4)
+
+# The persona prompt lives in Mongo but changes rarely, while it's read on every single request.
+_SYSTEM_PROMPT_TTL_SECONDS = 300
+_system_prompt_cache = {"value": None, "fetched_at": 0.0}
+
+
+def _get_cached_system_prompt() -> str:
+    now = time.monotonic()
+    if (
+        _system_prompt_cache["value"] is not None
+        and now - _system_prompt_cache["fetched_at"] < _SYSTEM_PROMPT_TTL_SECONDS
+    ):
+        return _system_prompt_cache["value"]
+
+    try:
+        prompt = return_system_prompt()
+        value = prompt.get("prompt", system_prompt) if prompt else system_prompt
+    except Exception as e:
+        # A slow/failing Mongo read must not take the chat down — fall back to the bundled persona.
+        logger.warning("Failed to load system prompt, using fallback", extra={"error": str(e)})
+        value = _system_prompt_cache["value"] or system_prompt
+
+    _system_prompt_cache["value"] = value
+    _system_prompt_cache["fetched_at"] = now
+    return value
+
+
+# Messages that carry no new topic to ground against — the reply lives entirely in what was just
+# said. Deliberately a closed set rather than a heuristic: a false positive here silently costs
+# grounding, which is the failure mode we're fixing, so anything not on this list counts as
+# substantive. Skipping the prefetch still leaves all four tools available to the model.
+_LOW_SIGNAL_MESSAGES = {
+    "", "hi", "hey", "hello", "yo", "hiya",
+    "ok", "okay", "k", "kk", "sure", "fine", "alright",
+    "yes", "yeah", "yep", "yup", "no", "nope", "nah",
+    "thanks", "thank you", "ty", "thankyou", "thanks so much", "thank you so much",
+    "cool", "nice", "great", "amazing", "perfect", "lovely", "wow", "omg",
+    "love it", "love this", "got it", "makes sense", "that makes sense", "i see",
+    "tell me more", "more", "go on", "continue", "and", "so",
+    "please", "haha", "lol", "hmm", "hm", "true", "right", "exactly", "same",
+}
+_LOW_SIGNAL_MAX_WORDS = 6
+
+# Words that carry no topic on their own, so a message built only from them ("ok cool", "yeah
+# thanks", "oh nice") is filler however they're combined — the exact-phrase set above can't
+# enumerate every pairing. Deliberately excludes "i", "me", "you" and "love": "i love you" and
+# "you hurt me" are made of small words but are the most substantive things someone could say.
+_LOW_SIGNAL_WORDS = {
+    "hi", "hey", "hello", "yo", "hiya", "oh", "ah", "aw", "yay",
+    "ok", "okay", "k", "kk", "sure", "fine", "alright", "cool", "nice", "great",
+    "amazing", "perfect", "lovely", "wow", "omg", "good", "sweet", "awesome",
+    "yes", "yeah", "yep", "yup", "no", "nope", "nah", "thanks", "ty",
+    "got", "it", "this", "that", "makes", "sense", "true", "right", "exactly",
+    "same", "haha", "lol", "hmm", "hm", "please", "and", "so", "very", "really",
+    "just", "much", "totally", "definitely", "for", "now", "then", "well",
+}
+
+# Polite multi-word forms collapsed before the word check, so "you" can stay out of the vocab.
+_POLITE_FORMS = [
+    ("thank you so much", "thanks"), ("thanks so much", "thanks"),
+    ("thank you very much", "thanks"), ("thank you", "thanks"), ("thankyou", "thanks"),
+]
+
+
+def _is_low_signal(message: str) -> bool:
+    """True if the message is pure acknowledgement / small talk with no topic to retrieve on."""
+    normalized = "".join(c for c in message.lower() if c.isalnum() or c.isspace())
+    normalized = " ".join(normalized.split())
+
+    # Emoji- or punctuation-only messages normalize to empty.
+    if not normalized:
+        return True
+    for form, replacement in _POLITE_FORMS:
+        normalized = normalized.replace(form, replacement)
+    normalized = " ".join(normalized.split())
+
+    words = normalized.split()
+    # Anything with real length is substantive by definition — never gamble on it.
+    if len(words) > _LOW_SIGNAL_MAX_WORDS:
+        return False
+    if normalized in _LOW_SIGNAL_MESSAGES:
+        return True
+    return all(w in _LOW_SIGNAL_WORDS for w in words)
+
+
+def _prefetch_user_context(email: str, message: str) -> str:
+    """Fetch long-term memory + journal context up front, in parallel.
+
+    Runs on the opening turn and on every substantive turn after it. Grounding used to be left to
+    the model deciding to call these two tools, which cost a full model round-trip when it did and
+    silently lost grounding when it didn't. Retrieving directly is both cheaper (one Pinecone hop,
+    no model hop) and reliable. Only genuine filler turns skip it — see _is_low_signal.
+    """
+    futures = {
+        "memory": _tool_executor.submit(get_memory, email, message),
+        "journal": _tool_executor.submit(get_journal_context, email, message),
+    }
+    resolved = {}
+    for label, future in futures.items():
+        try:
+            resolved[label] = future.result(timeout=8)
+        except Exception as e:
+            # Opening context is a bonus, not a requirement — a slow or failing lookup should
+            # degrade to "no context" rather than delay or break the first reply.
+            logger.warning("Context prefetch failed", extra={"email": email, "source": label, "error": str(e)})
+            resolved[label] = {}
+
+    memory = (resolved["memory"].get("long_term_memory") or "").strip()
+    journal = (resolved["journal"].get("journal_context") or "").strip()
+
+    parts = []
+    if memory:
+        parts.append(f"What you remember about them:\n{memory}")
+    if journal:
+        parts.append(f"Their recent journal entries:\n{journal}")
+
+    if not parts:
+        # Say so explicitly, otherwise the model burns a round-trip fetching these itself.
+        return (
+            "CONTEXT FOR THIS TURN: nothing stored in their memory or journal matches this topic. Do "
+            "not call get_memory or get_journal_context this turn — they have already been checked "
+            "and there is nothing to find. Ground your reply in what they just said, and in the "
+            "knowledge base if you're teaching them anything."
+        )
+
+    return (
+        "CONTEXT FOR THIS TURN (already retrieved for you — do not call get_memory or "
+        "get_journal_context again this turn):\n\n" + "\n\n".join(parts)
+    )
+
+
+def _run_tool(email: str, func_name: str, func_args: dict):
+    """Execute one tool call. Returns (content_for_model, kb_chunks)."""
+    if func_name == "search_knowledge_base":
+        kb_chunks = get_kb_context(func_args["query"], k=3)
+        chunks = [c for c in kb_chunks.split("\n") if c.strip()] if kb_chunks else []
+        return json.dumps({"knowledge_base": kb_chunks}), chunks
+
+    if func_name == "get_memory":
+        return json.dumps(get_memory(email, func_args["memory"])), []
+
+    if func_name == "update_memory":
+        # Fire-and-forget: the model never reads anything back from a write, so making it wait on
+        # an embedding call plus a Pinecone upsert is pure added latency on the user's reply.
+        _bg_executor.submit(update_memory, email, func_args["memory"])
+        return f"Memory stored successfully: {func_args['memory']}", []
+
+    if func_name == "get_journal_context":
+        return json.dumps(get_journal_context(email, func_args["query"])), []
+
+    logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
+    return json.dumps({"error": f"Unknown tool '{func_name}'"}), []
 
 
 def _generate_and_set_title(session_id: str, email: str, user_message: str, assistant_reply: str) -> None:
@@ -224,8 +389,7 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
     email = email.lower()
     logger.info("Chat agent invoked", extra={"email": email, "session_id": session_id})
 
-    prompt = return_system_prompt()
-    mmd_system_prompt = prompt.get("prompt", system_prompt) if prompt else system_prompt
+    mmd_system_prompt = _get_cached_system_prompt()
 
     try:
         # Create a new session if none provided
@@ -241,15 +405,37 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         # Strip timestamps before sending to the model
         history_for_model = [{"role": m["role"], "content": m["content"]} for m in history]
 
-        user_context = f"The user's name is {username}. " if username else ""
+        # Nothing in the profile records gender, while the persona prompt refers to the user as
+        # "she"/"her" throughout — so without this the model addresses every user as a woman.
+        user_context = (
+            (f"The user's name is {username}. " if username else "")
+            + "You do not know this user's gender, and a name is not evidence of it. Refer to them "
+            "with neutral language (they/them) unless they tell you otherwise — this holds even "
+            "where the instructions above are written as \"she\" or \"her\"."
+        )
         messages = [
             {"role": "system", "content": mmd_system_prompt},
             {"role": "system", "content": TOOL_GROUNDING_INSTRUCTIONS},
             {"role": "system", "content": APP_FEATURE_REFERRAL_INSTRUCTIONS},
+            {"role": "system", "content": KB_USAGE_INSTRUCTIONS},
+            # Last of the system messages on purpose: it overrides the persona prompt's multi-step
+            # reply structure, so it should be the closest one to the user turn.
+            {"role": "system", "content": RESPONSE_STYLE_INSTRUCTIONS},
             {"role": "system", "content": user_context.strip()},
             *history_for_model,
-            {"role": "user", "content": message},
         ]
+
+        # Ground every substantive turn, and always the opening one — "hi" on turn 1 is exactly when
+        # greeting them by what you remember matters. Only mid-conversation filler skips the lookup.
+        # Appended here rather than up with the system messages on purpose: this text differs on
+        # every request, so keeping it out of the cached prefix protects the prompt cache, and
+        # sitting next to their message is where it's most likely to be used.
+        if not history or not _is_low_signal(message):
+            messages.append({"role": "system", "content": _prefetch_user_context(email, message)})
+        else:
+            logger.info("Skipped context prefetch (low-signal turn)", extra={"email": email, "session_id": session_id})
+
+        messages.append({"role": "user", "content": message})
 
         reply = None
         kb_references = []
@@ -259,7 +445,16 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
-                temperature=1.0
+                temperature=1.0,
+                # gpt-5-mini is a reasoning model and defaults to medium effort, which it pays on
+                # every hop of the tool loop. This is a chat persona doing retrieval, not a hard
+                # reasoning task — "low" cuts several seconds per hop.
+                reasoning_effort="low",
+                # Fewer output tokens is the other half of the latency win, and it reinforces the
+                # short chat-style replies RESPONSE_STYLE_INSTRUCTIONS asks for.
+                verbosity="low",
+                # Stable key so the long system-prompt prefix keeps hitting the same prompt cache.
+                prompt_cache_key="sanaya-chat-v1",
             )
 
             result = response.choices[0]
@@ -284,27 +479,27 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
                 ],
             })
 
+            # Dispatch all of this turn's tools at once, then collect in the original order so each
+            # tool_call_id still lines up with its result.
+            futures = []
             for tool_call in tool_calls:
                 func_name = tool_call.function.name
                 func_args = json.loads(tool_call.function.arguments)
-
                 logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
+                futures.append((tool_call, _tool_executor.submit(_run_tool, email, func_name, func_args)))
 
-                if func_name == "search_knowledge_base":
-                    kb_chunks = get_kb_context(func_args["query"], k=3)
-                    if kb_chunks:
-                        kb_references.extend([c for c in kb_chunks.split("\n") if c.strip()])
-                    tool_result_content = json.dumps({"knowledge_base": kb_chunks})
-                elif func_name == "get_memory":
-                    tool_result_content = json.dumps(get_memory(email, func_args["memory"]))
-                elif func_name == "update_memory":
-                    update_memory(email, func_args["memory"])
-                    tool_result_content = f"Memory stored successfully: {func_args['memory']}"
-                elif func_name == "get_journal_context":
-                    tool_result_content = json.dumps(get_journal_context(email, func_args["query"]))
-                else:
-                    logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
-                    tool_result_content = json.dumps({"error": f"Unknown tool '{func_name}'"})
+            for tool_call, future in futures:
+                try:
+                    tool_result_content, chunks = future.result()
+                    kb_references.extend(chunks)
+                except Exception as e:
+                    # One failed retrieval shouldn't kill the whole reply — tell the model and
+                    # let it answer with what it does have.
+                    logger.error(
+                        "[chat_agent] Tool execution failed",
+                        extra={"email": email, "tool": tool_call.function.name, "error": str(e)},
+                    )
+                    tool_result_content = json.dumps({"error": "Lookup failed, no data available."})
 
                 messages.append({
                     "role": "tool",
