@@ -31,7 +31,7 @@ def chat(data: ChatModel, current_user=Depends(get_active_user)):
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
-    return {"reply": result["reply"], "session_id": result["session_id"]}
+    return {"reply": result["reply"], "session_id": result["session_id"], "cta": result["cta"]}
 
 
 @chat_router.get("/chat/ice-breakers")

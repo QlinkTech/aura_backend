@@ -1,3 +1,4 @@
+import re
 import time
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
@@ -11,11 +12,30 @@ EXCLUDED_FIELDS = {"password": 0}
 LIST_FIELDS = {
     "_id": 0, "email": 1, "username": 1, "phone": 1,
     "is_paid": 1, "is_bypassed": 1, "early_bird_plan_key": 1, "early_bird_sub_id": 1,
-    "subscription_status": 1, "trial_end_at": 1, "created_at": 1, "updated_at": 1,
+    "subscription_status": 1, "trial_end_at": 1, "paid_until": 1, "created_at": 1, "updated_at": 1,
     "engagement_tier": 1, "trial_engagement_tier": 1, "engagement_status": 1,
 }
 
 _ACTIVE_PAYMENT_STATUSES = {"active", "authenticated", "charged"}
+# Mirrors _LAPSED_SUBSCRIPTION_STATUSES in auth_service.py / access_sync.py — statuses that mean
+# "won't renew" but don't necessarily end access immediately if a paid-up period is still running.
+# Used for revocation-eligibility checks (does this user's access need re-checking at all).
+_LAPSED_PAYMENT_STATUSES = {"cancelled", "paused", "free", "expired", "halted"}
+# Narrower than the above, for display only: a REAL subscription that lapsed. Excludes "free" —
+# activate_free_plan() sets subscription_status="free" with no early_bird_sub_id/plan_key at all,
+# so a "free" user still inside their window is on a free trial, not a cancelled subscription.
+_CANCELLED_SUBSCRIPTION_STATUSES = {"cancelled", "paused", "expired", "halted"}
+
+
+def _access_expires_at(doc: dict) -> int:
+    """Timestamp this user's current access actually runs out at, if any.
+
+    paid_until (cancel-at-cycle-end paid access) takes precedence over trial_end_at
+    (free trial window) when both are set — same precedence used to decide real
+    access in auth_service.revoke_access_if_lapsed / access_sync._compute_is_paid.
+    """
+    return doc.get("paid_until") or doc.get("trial_end_at") or 0
+
 
 def _resolve_payment_status(doc: dict) -> str:
     if doc.get("is_bypassed"):
@@ -26,11 +46,16 @@ def _resolve_payment_status(doc: dict) -> str:
     has_sub = bool(doc.get("early_bird_sub_id"))
 
     if is_paid:
-        if sub_status == "cancelled":
-            trial_end_at = doc.get("trial_end_at", 0)
-            if trial_end_at and int(time.time()) < trial_end_at:
-                return "trial_active"
-        return "active" if sub_status in _ACTIVE_PAYMENT_STATUSES else "free_trail"
+        if sub_status in _ACTIVE_PAYMENT_STATUSES:
+            return "active"
+        if sub_status in _CANCELLED_SUBSCRIPTION_STATUSES:
+            # A real paying customer who cancelled (or was paused/halted) but is still inside
+            # their paid-up window — distinct from someone who never converted. Previously
+            # mislabeled "trial_active", which reads as "still on a free trial".
+            expires_at = _access_expires_at(doc)
+            if expires_at and int(time.time()) < expires_at:
+                return "cancelled_active"
+        return "free_trail"
     if sub_status:
         return sub_status
     if has_sub:
@@ -44,9 +69,9 @@ def list_users(
     limit: int = Query(20, ge=1, le=100),
     is_paid: Optional[bool] = Query(None),
     is_bypassed: Optional[bool] = Query(None, description="Filter by granted access (bypass) status"),
-    search: Optional[str] = Query(None, description="Search by email or username"),
+    search: Optional[str] = Query(None, description="Search by email, username, or phone"),
     engagement_status: Optional[str] = Query(None, description="Filter by engagement status: cold, warm, hot, converted, no_trial"),
-    payment_status: Optional[str] = Query(None, description="Filter by resolved payment status: granted_access, trial_active, active, free_trail, payment_pending, not_initiated (or a raw subscription_status value)"),
+    payment_status: Optional[str] = Query(None, description="Filter by resolved payment status: granted_access, active, cancelled_active, free_trail, payment_pending, not_initiated (or a raw subscription_status value)"),
 ):
     """List all users with pagination, sorted by most recently active."""
     try:
@@ -64,9 +89,11 @@ def list_users(
             query["engagement_status"] = engagement_status
 
         if search:
+            search_pattern = re.escape(search)
             query["$or"] = [
-                {"email": {"$regex": search, "$options": "i"}},
-                {"username": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search_pattern, "$options": "i"}},
+                {"username": {"$regex": search_pattern, "$options": "i"}},
+                {"phone": {"$regex": search_pattern, "$options": "i"}},
             ]
 
         skip = (page - 1) * limit
@@ -100,6 +127,7 @@ def list_users(
                 "plan": doc.get("early_bird_plan_key") if doc.get("is_paid") else ("bypassed" if doc.get("is_bypassed") else "free"),
                 "is_bypassed": doc.get("is_bypassed", False),
                 "trial_end_at": doc.get("trial_end_at"),
+                "access_until": _access_expires_at(doc) or None,
                 "last_active": doc.get("updated_at"),
                 "created_at": doc.get("created_at"),
                 "engagement_tier": doc.get("engagement_tier"),
@@ -139,6 +167,9 @@ def get_user(email: str):
         user["chat_stats"] = result[0] if result else {"session_count": 0, "total_messages": 0}
         user["chat_stats"].pop("_id", None)
 
+        user["payment_status"] = _resolve_payment_status(user)
+        user["access_until"] = _access_expires_at(user) or None
+
         return user
 
     except Exception as e:
@@ -151,12 +182,12 @@ def bypass_user_payment(email: str):
     """Toggle bypass access for a user. Not applicable if the user already has a real paid subscription."""
     try:
         email = email.lower()
-        user = user_profile.find_one({"email": email}, {"_id": 1, "is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1})
+        user = user_profile.find_one({"email": email}, {"_id": 1, "is_paid": 1, "is_bypassed": 1, "subscription_status": 1, "trial_end_at": 1, "paid_until": 1})
         if not user:
             return JSONResponse({"error": "User not found"}, status_code=404)
 
-        if user.get("is_paid") and user.get("subscription_status") in ("cancelled", "paused", "free"):
-            if int(time.time()) >= user.get("trial_end_at", 0):
+        if user.get("is_paid") and user.get("subscription_status") in _LAPSED_PAYMENT_STATUSES:
+            if int(time.time()) >= _access_expires_at(user):
                 user_profile.update_one({"email": email}, {"$set": {"is_paid": False, "updated_at": int(time.time())}})
                 user["is_paid"] = False
 

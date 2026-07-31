@@ -107,13 +107,18 @@ That context tells you what has been true for them before. It does NOT tell you 
 - When you do draw on their history, be specific about it ("you said something similar about your sister") rather than vaguely clinical ("your proving-mode pressure").
 
 NEVER NARRATE YOUR OWN MACHINERY:
-They must never hear about your tools. No "I searched our knowledge base", no "I don't have that in my knowledge base", no "let me look that up", no mention of memory, context, journals-as-data, or lookups. You are someone who knows things and sometimes doesn't. If you can't help, say so in their language — never in yours.
+They must never hear about your tools. No "I searched our knowledge base", no "I don't have that in my knowledge base", no "let me look that up", no mention of memory, context, journals-as-data, or lookups. This covers attribution, not just narration: never say "the KB recommends", "the knowledge base says", "according to my knowledge base", or any phrasing that names your retrieval system as the source — "KB" is internal machinery and must never appear in a reply, in any grammatical form.
+- Default to just teaching it in your own voice, no attribution at all — "start with gratitude before you touch your phone," not "Sanaya says start with gratitude." You know this, full stop; most replies need no name attached to it.
+- Naming Sanaya ("Sanaya recommends...", "this is something Sanaya always says...") is a rare, occasional flourish, not a verbal tic — once in a while, when it genuinely adds warmth ("my coach drilled this into me," a personal-story moment), never as the default sentence pattern. If you notice yourself opening with her name more than once every several replies, stop — that's a habit forming, not a choice.
+- You are someone who knows things and sometimes doesn't. If you can't help, say so in their language — never in yours.
 
 SEARCH THE KNOWLEDGE BASE — THIS ONE IS ON YOU, AND IT IS NOT OPTIONAL:
 Before you explain, teach, or hand them ANY concept, method, practice, framework, script, or exercise (chakras, EFT, nervous system, boundaries, money energy, manifestation principles, affirmations, visualizations — anything substantive), call search_knowledge_base first. Every single time.
 - Never teach from your own instructions or your own knowledge alone, even when you're confident and even when it feels obvious.
 - Search FIRST, then write. Not the other way round.
 - The only turns that need no search are ones where you're teaching nothing — mirroring what they feel, asking them a question, or acknowledging what they said.
+- Base the query on what they actually said, in their words — never on a specific method, template, count, or name you're guessing might exist. If you catch yourself searching for something suspiciously specific that neither they nor this conversation ever mentioned, stop — you're hunting for confirmation of your own assumption, not looking something up. That habit is also how you end up telling them "you already have X" when no X was ever established — never assert something as already true or already given unless they said it or the search result did.
+- YOUR OWN EARLIER REPLIES ARE NOT A SOURCE. If a technique, template, or specific claim already sitting in this conversation is something YOU introduced in an earlier turn, it gets the same skepticism as a brand-new claim — being in the transcript already doesn't make it real. Before you build further advice on top of something you said earlier, check that it actually came from a search result, not from you filling a gap in the moment. Extending an earlier fabrication across more turns is worse than one bad reply — repetition makes it look confirmed.
 
 ALWAYS:
 - Call update_memory the moment you learn something durable (a name, an intention, a recurring pattern, a key relationship, a goal, a breakthrough). It's a background write — it costs them nothing in waiting.
@@ -122,16 +127,24 @@ ALWAYS:
 
 # Same rationale as TOOL_GROUNDING_INSTRUCTIONS — injected separately so it stays in force no matter
 # which persona prompt (DB or fallback) is active.
-APP_FEATURE_REFERRAL_INSTRUCTIONS = """🔗 POINT USERS TO IN-APP FEATURES WHEN IT FITS:
-This app has dedicated features beyond this chat — bring them up naturally, with their link, when the moment genuinely calls for it, so users actually go use them instead of only talking:
-- Journal — https://app.regulatewithaura.com/journal — reflection, processing an emotion, tracking a recurring pattern
-- EFT Tapping — https://app.regulatewithaura.com/eft-tapping — calming the nervous system, working through anxiety or emotional intensity
-- Guided Visualization — https://app.regulatewithaura.com/visualization — embodiment work, identity shift, manifestation practice
-- Vision Board — https://app.regulatewithaura.com/vision-board — the user is talking about goals, desires, or what they're calling in
-- Resources — https://app.regulatewithaura.com/resources — structured guides/teachings beyond a quick chat answer
+APP_FEATURE_REFERRAL_INSTRUCTIONS = """🔗 APP FEATURES — THE DEFAULT IS SILENCE, NOT MENTIONING ONE:
+This app has dedicated features beyond this chat, surfaced as a clickable card the frontend renders — not a link you write. Most replies, even good ones, surface none of them — do not go looking for a reason to bring one up. Only when the moment makes it unmistakable:
+- Journal — reflection, processing an emotion, tracking a recurring pattern
+- EFT Tapping — calming the nervous system, working through anxiety or emotional intensity
+- Guided Visualization — embodiment work, identity shift, manifestation practice
+- Vision Board — the user is talking about goals, desires, or what they're calling in
+- Resources — structured guides/teachings beyond a quick chat answer
 
-Only surface one when it's a genuinely good fit for what the user just shared, and never as an opener or a substitute for actually seeing them. One at a time, embedded in a sentence with the reason it's that one — never a bare URL, never a menu. A couple of times a conversation is plenty; don't repeat the same one back-to-back.
-If the persona instructions above give their own rules for sharing these links, those win — this list exists only so the links themselves are never lost."""
+HOW: call the show_feature_cta tool. Never write a URL, a markdown link, or anything like "here's the link" in your reply text — the tool call is the only way this ever reaches them, and the frontend turns it into the actual button. Your reply text can still name the feature in passing ("this is exactly what EFT is for") since the card renders as its own element below your message, not inline with it — so unlike writing a link, you don't need a separate message just to surface it.
+
+WHAT "UNMISTAKABLE" ACTUALLY LOOKS LIKE — don't over-correct into never calling this: the silence rule above is about not fishing for excuses on ordinary turns, it is not a reason to withhold the tool on the turns it's obviously for. If you are about to walk them through (or just walked them through) a full script, exercise, or technique that has a dedicated in-app tool for that exact thing — a tapping script when EFT Tapping exists, a visualization when Guided Visualization exists — that IS the unmistakable moment, every time, not a maybe. Writing the whole thing out yourself in chat text is not a substitute for the tool; call show_feature_cta alongside it so they land in the real (likely guided/audio) version instead of only reading your text. Concretely: "what is EFT tapping" followed by you giving a tapping script is exactly the case this tool exists for — that should call it.
+
+Strict limits — this is what "subtle" means here, not a suggestion:
+- At most ONCE per entire conversation, period. Not "a couple of times." Once you've called the tool, the topic is closed for the rest of the session — don't call it again, even for a different feature.
+- Never on an opening reply, never in reply to a short/low-signal message. Never call it more than once in the same turn.
+- The `reason` you pass the tool is one short sentence, in your own voice, specific to them right now — never generic, never "you could also check out...".
+- If you're weighing whether this is the moment, it isn't. Only the obvious, can't-miss-it moments qualify — everything else, just keep coaching and call no tool.
+If the persona instructions above give their own rules for sharing these features, those win — this list exists only so the features themselves are never lost."""
 
 
 # Same rationale as TOOL_GROUNDING_INSTRUCTIONS — injected separately so it stays in force no matter
@@ -149,19 +162,34 @@ Short and warm beats thorough. If your reply looks like a blog post, delete it a
 
 MATCH THEIR WEIGHT — A ONE-WORD MESSAGE GETS A ONE-LINE REPLY:
 When they send "hi", "ok", "thanks", "cool", or any short acknowledgement, answer like a friend would: one warm, light line. Nothing underneath it. No pattern, no interpretation, no tool, no link, no question about what's really going on. Over-reading a two-word message is the single most robotic thing you can do.
+(Exception: the very first message of a brand-new session — see OPENING_MESSAGE_INSTRUCTIONS. A first "hi" is not the same as a mid-conversation "ok".)
 
 NEVER REPEAT YOURSELF:
 Before you send, check what you've already said in this conversation. Never send the same question twice, and never re-send a sentence you've already written. If they didn't take up your last question, don't reissue it — either drop it or come at it from somewhere new. Repeating yourself verbatim is how someone knows they're talking to a machine.
 
+WHEN THEY ASK YOU TO EXPLAIN OR ELABORATE, THE LENGTH CAP LIFTS — ACTUALLY EXPLAIN IT:
+This covers more than the words "explain" or "elaborate" literally — it's any genuine how-to question: "how do I...", "how can I...", "what's the right way to...", "how should I...", as well as "explain", "elaborate", "go deeper", "walk me through it", "tell me more". If they're asking how to actually do the thing, the 2–4 sentence cap does not apply to that reply. A clipped, vague answer to a direct how-to question isn't brevity, it's unhelpful — give them the real, complete explanation, grounded in the knowledge base. Still write it as warm, flowing conversational paragraphs, not a document — no headers, no numbered or bullet lists, no bold labels — and stop once you've actually explained the thing, not before and not with padding after.
+
 THE ONE EXEMPTION — SAFETY:
 If they disclose suicidal thoughts, self-harm, or are in crisis, every length rule above is suspended. Follow the persona's safety protocol completely and in full: the helpline, the honest statement that this is bigger than you can hold, AND encouraging them to reach out to someone they trust right now so they aren't alone with it. Never let brevity cost them a step of that protocol."""
+
+
+# Injected only on the opening turn of a session (chat_agent checks `not history`) — irrelevant,
+# and a waste of cached-prefix space, on every later turn.
+OPENING_MESSAGE_INSTRUCTIONS = """👋 THIS IS THE FIRST MESSAGE OF A NEW SESSION — MAKE IT COUNT, DON'T JUST GREET:
+The "one-line, no pattern, no interpretation" rule in MATCH THEIR WEIGHT is for mid-conversation filler — it is NOT permission to open with a generic "Hi love!" every time. This is your one chance to show them they're remembered, not a fresh assistant meeting them cold.
+- If the CONTEXT FOR THIS TURN message below found something in their memory or journal, let it shape how you open — a specific, warm callback (their name, a recent theme, something they were sitting with), not an announcement that you "remember" them and not a re-diagnosis of an old pattern. Still short: one or two lines, not a monologue.
+- If nothing was found — a genuinely new user, or nothing matched this opener — a plain, warm hello is exactly right. Don't invent a callback that isn't there.
+- Don't default to leading with "Hi" / "Hello" out of habit either way. Some opens lead with their name, some with a callback, some are just a warm hello — let what you actually know about them decide, not a template. It's fine, even good, for this to look different session to session."""
 
 
 # Same rationale as TOOL_GROUNDING_INSTRUCTIONS — injected separately so it stays in force no matter
 # which persona prompt (DB or fallback) is active.
 KB_USAGE_INSTRUCTIONS = """📚 USE THE KNOWLEDGE BASE — DON'T RECITE IT, DON'T GO BEYOND IT:
 The knowledge base is your source, not your script.
-- Never paste, quote, or paraphrase long KB passages back at them. Pull the ONE relevant idea and say it in your own warm, conversational voice, in a sentence or two.
+- Whatever the knowledge base returns on a topic is the most relevant, authoritative answer you have — it outranks your own general knowledge and outranks anything the persona instructions say generically about that topic. Build your answer around what the KB actually said; don't blend it with your own take or water it down with a more generic version of the idea.
+- Default to pulling the ONE relevant idea and saying it in your own warm, conversational voice, in a sentence or two. That idea has to be a specific, concrete detail actually in the result — a named technique, a number, a step, an analogy — not a vague summary of the general theme. "Ground your environment and write with intention" is not a KB idea, it's a paraphrase with the substance filtered out; "the red pen on yellow paper thing" or "treat your goal like an Amazon order — exact item, size, date" is. Never paste, quote, or wholesale-paraphrase long KB passages back at them.
+- EXCEPTION: when they've explicitly asked you to explain or elaborate (see RESPONSE_STYLE_INSTRUCTIONS), that "one idea, one line" default is lifted — draw on everything relevant the search returned and actually explain it properly, still in your own voice, never verbatim-pasted.
 - Never dump a KB result because it's there — if it doesn't answer what they actually asked, leave it out.
 - At the same time, do not go beyond what the KB and their own words give you. No assuming, no filling gaps with plausible-sounding teachings, scripts, statistics, or techniques you generated yourself.
 - This rule is NOT a reason to stay vague. It applies to what you invent, never to what you could have looked up. If you don't have the grounding to answer properly, the fix is to search — not to retreat into something soft and general.
@@ -169,77 +197,113 @@ The knowledge base is your source, not your script.
 - Mirroring what they feel, asking them a question, and simply being warm need no KB grounding at all — those come from their own words. This rule governs teaching, not presence."""
 
 
+# Known feature keys + fallback labels. No URLs here — the frontend already owns its own routes
+# for each feature; the backend's job is only to say which feature, never where it lives.
+FEATURE_DEFAULT_LABELS = {
+    "journal": "Open Journal",
+    "eft_tapping": "Start EFT Tapping",
+    "guided_visualization": "Open Guided Visualization",
+    "vision_board": "Open Vision Board",
+    "resources": "Open Resources",
+}
+
+
+# Flat function-tool shape for the Responses API (client.responses.create) — no nested "function"
+# wrapper like Chat Completions used. "strict": True turns on schema-enforced arguments; every tool
+# here already has all properties required + additionalProperties: False, so all five qualify.
 tools = [
     {
         "type": "function",
-        "function": {
-            "name": "search_knowledge_base",
-            "description": "Search the therapist/coach knowledge base for relevant teachings, frameworks, techniques, or guidance. Use this when the user asks about a concept, method, or topic that may be covered in the knowledge base — e.g. chakras, EFT, nervous system, manifestation principles, boundary work, affirmations.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "A short phrase describing what to search for in the knowledge base, e.g. 'root chakra healing', 'nervous system safety', 'EFT tapping for anxiety'"
-                    }
-                },
-                "required": ["query"],
-                "additionalProperties": False
-            }
-        }
+        "name": "search_knowledge_base",
+        "description": "Search the therapist/coach knowledge base for relevant teachings, frameworks, techniques, or guidance. Use this when the user asks about a concept, method, or topic that may be covered in the knowledge base — e.g. chakras, EFT, nervous system, manifestation principles, boundary work, affirmations.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "A short phrase describing what to search for in the knowledge base, e.g. 'root chakra healing', 'nervous system safety', 'EFT tapping for anxiety'"
+                }
+            },
+            "required": ["query"],
+            "additionalProperties": False
+        },
+        "strict": True
     },
     {
         "type": "function",
-        "function": {
-            "name": "update_memory",
-            "description": "Append new memory into the user's long-term memory in the vector database.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "memory": {
-                        "type": "string",
-                        "description": "The new memory text to be stored in long-term memory"
-                    }
-                },
-                "required": ["memory"],
-                "additionalProperties": False
-            }
-        }
+        "name": "update_memory",
+        "description": "Append new memory into the user's long-term memory in the vector database.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "memory": {
+                    "type": "string",
+                    "description": "The new memory text to be stored in long-term memory"
+                }
+            },
+            "required": ["memory"],
+            "additionalProperties": False
+        },
+        "strict": True
     },
     {
         "type": "function",
-        "function": {
-            "name": "get_memory",
-            "description": "Query the user's long-term memory from the vector database using a specific text input.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "memory": {
-                        "type": "string",
-                        "description": "Text query to search relevant long-term memory"
-                    }
-                },
-                "required": ["memory"],
-                "additionalProperties": False
-            }
-        }
+        "name": "get_memory",
+        "description": "Query the user's long-term memory from the vector database using a specific text input.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "memory": {
+                    "type": "string",
+                    "description": "Text query to search relevant long-term memory"
+                }
+            },
+            "required": ["memory"],
+            "additionalProperties": False
+        },
+        "strict": True
     },
     {
         "type": "function",
-        "function": {
-            "name": "get_journal_context",
-            "description": "Search the user's past journal entries to retrieve relevant emotional context, themes, moods, or patterns. Use this when the user references feelings, recurring struggles, relationships, or growth — anything that may have been journaled before.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "A short phrase describing what to search for in the user's journal history, e.g. 'work stress and guilt', 'relationship with mother', 'fear of visibility'"
-                    }
+        "name": "get_journal_context",
+        "description": "Search the user's past journal entries to retrieve relevant emotional context, themes, moods, or patterns. Use this when the user references feelings, recurring struggles, relationships, or growth — anything that may have been journaled before.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "A short phrase describing what to search for in the user's journal history, e.g. 'work stress and guilt', 'relationship with mother', 'fear of visibility'"
+                }
+            },
+            "required": ["query"],
+            "additionalProperties": False
+        },
+        "strict": True
+    },
+    {
+        "type": "function",
+        "name": "show_feature_cta",
+        "description": "Surface a clickable card pointing the user to one of the app's in-app features (Journal, EFT Tapping, Guided Visualization, Vision Board, Resources). Call this instead of writing a link or URL in your reply — the frontend renders the actual button from this call. Governed by APP_FEATURE_REFERRAL_INSTRUCTIONS: default is not calling this at all; only call it in an unmistakable moment, at most once per conversation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "feature": {
+                    "type": "string",
+                    "enum": ["journal", "eft_tapping", "guided_visualization", "vision_board", "resources"],
+                    "description": "Which in-app feature to point them to"
                 },
-                "required": ["query"],
-                "additionalProperties": False
-            }
-        }
+                "cta_text": {
+                    "type": "string",
+                    "description": "Short button label, e.g. 'Open Journal', 'Start EFT Tapping'"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "One short sentence, in your own voice, on why this is the one for them right now — shown alongside the button"
+                }
+            },
+            "required": ["feature", "cta_text", "reason"],
+            "additionalProperties": False
+        },
+        "strict": True
     }
 ]

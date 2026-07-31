@@ -92,6 +92,8 @@ jobs:
             GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }}
             GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }}
             GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }}
+            CHROMA_TENANT=${{ secrets.CHROMA_TENANT }}
+            CHROMA_API=${{ secrets.CHROMA_API }}
             EOF
 
             # Ensure Docker container logs are kept for at most 2 days.

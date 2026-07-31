@@ -3,7 +3,7 @@ from app.utils.schema import JournalModel
 from app.services.auth_service import get_active_user
 from app.core.journal_agent.journal_agent import journal_agent, generate_journal_prompts
 from app.services.db.journal_utils import get_journal_logs, get_journal_log_by_id, delete_journal_log
-from app.services.db.pinecone_utils import delete_record_by_id, pinecone_journal_namespace
+from app.services.db.chroma.utils import delete_record_by_id
 from app.utils.logger_config import logger
 
 journal_router = APIRouter()
@@ -58,5 +58,5 @@ def remove_journal_log(log_id: str, current_user=Depends(get_active_user)):
     deleted = delete_journal_log(email=email, log_id=log_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Journal log not found")
-    delete_record_by_id(record_id=log_id, namespace=pinecone_journal_namespace)
+    delete_record_by_id(record_id=log_id, collection="user_ltm")
     return {"success": True}

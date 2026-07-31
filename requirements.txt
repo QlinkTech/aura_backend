@@ -28,3 +28,6 @@ elevenlabs
 pydub
 sse-starlette
 Pillow
+
+chromadb
+pyyaml

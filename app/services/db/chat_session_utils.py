@@ -49,10 +49,12 @@ def get_session_messages(session_id: str, email: str, limit: int = 20) -> list:
     return messages[-limit:]
 
 
-def add_session_message(session_id: str, email: str, role: str, content: str, kb_references: list = None):
+def add_session_message(session_id: str, email: str, role: str, content: str, kb_references: list = None, cta: dict = None):
     message = {"role": role, "content": content, "timestamp": int(time.time())}
     if kb_references:
         message["kb_references"] = kb_references
+    if cta:
+        message["cta"] = cta
     chat_sessions.update_one(
         {"session_id": session_id, "email": email},
         {"$push": {"messages": message}, "$set": {"updated_at": int(time.time())}}

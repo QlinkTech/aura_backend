@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from openai import OpenAI
 from app.services.db.mongo_utils import return_system_prompt
-from app.services.db.pinecone_utils import upsert_data, fetch_data, upsert_kb, fetch_kb, fetch_journal
+from app.services.db.chroma.utils import upsert_data, fetch_data, upsert_kb, fetch_kb, fetch_journal
 from app.services.db.chat_session_utils import (
     create_chat_session,
     get_chat_session,
@@ -20,10 +20,12 @@ from app.utils.env_load import openai_api_key
 from app.core.agent_utils import (
     system_prompt,
     tools,
+    FEATURE_DEFAULT_LABELS,
     TOOL_GROUNDING_INSTRUCTIONS,
     APP_FEATURE_REFERRAL_INSTRUCTIONS,
     KB_USAGE_INSTRUCTIONS,
     RESPONSE_STYLE_INSTRUCTIONS,
+    OPENING_MESSAGE_INSTRUCTIONS,
 )
 
 openai_client = OpenAI(
@@ -168,49 +170,67 @@ def _prefetch_user_context(email: str, message: str) -> str:
 
 
 def _run_tool(email: str, func_name: str, func_args: dict):
-    """Execute one tool call. Returns (content_for_model, kb_chunks)."""
+    """Execute one tool call. Returns (content_for_model, kb_reference, cta).
+
+    kb_reference is None for every tool except search_knowledge_base, where it's a
+    single {"query": ..., "chunks": [...]} record — the query that was searched
+    paired with exactly what came back, for kb_references on the stored message.
+
+    cta is None for every tool except show_feature_cta, where it's a
+    {"feature": ..., "label": ..., "reason": ...} record for the frontend to render
+    as a button — no URL, the frontend already owns its own route per feature.
+    """
     if func_name == "search_knowledge_base":
-        kb_chunks = get_kb_context(func_args["query"], k=3)
-        chunks = [c for c in kb_chunks.split("\n") if c.strip()] if kb_chunks else []
-        return json.dumps({"knowledge_base": kb_chunks}), chunks
+        query = func_args["query"]
+        context, chunks = get_kb_context(query)
+        reference = {"query": query, "chunks": chunks} if chunks else None
+        return json.dumps({"knowledge_base": context}), reference, None
 
     if func_name == "get_memory":
-        return json.dumps(get_memory(email, func_args["memory"])), []
+        return json.dumps(get_memory(email, func_args["memory"])), None, None
 
     if func_name == "update_memory":
         # Fire-and-forget: the model never reads anything back from a write, so making it wait on
         # an embedding call plus a Pinecone upsert is pure added latency on the user's reply.
         _bg_executor.submit(update_memory, email, func_args["memory"])
-        return f"Memory stored successfully: {func_args['memory']}", []
+        return f"Memory stored successfully: {func_args['memory']}", None, None
 
     if func_name == "get_journal_context":
-        return json.dumps(get_journal_context(email, func_args["query"])), []
+        return json.dumps(get_journal_context(email, func_args["query"])), None, None
+
+    if func_name == "show_feature_cta":
+        feature = func_args["feature"]
+        if feature not in FEATURE_DEFAULT_LABELS:
+            return json.dumps({"error": f"Unknown feature '{feature}'"}), None, None
+        cta = {
+            "feature": feature,
+            "label": func_args.get("cta_text") or FEATURE_DEFAULT_LABELS[feature],
+            "reason": func_args.get("reason", ""),
+        }
+        return json.dumps({"status": "shown"}), None, cta
 
     logger.warning("Unknown tool called", extra={"email": email, "tool": func_name})
-    return json.dumps({"error": f"Unknown tool '{func_name}'"}), []
+    return json.dumps({"error": f"Unknown tool '{func_name}'"}), None, None
 
 
 def _generate_and_set_title(session_id: str, email: str, user_message: str, assistant_reply: str) -> None:
     try:
-        response = openai_client.chat.completions.create(
+        response = openai_client.responses.create(
             model="gpt-4.1-nano",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Generate a short session title (4-6 words max) that captures the core topic "
-                        "of this wellness conversation. No quotes, no punctuation at the end. "
-                        "Examples: 'Work Stress and Burnout', 'Anxiety Around Relationships', "
-                        "'Letting Go of Grief', 'Finding Inner Confidence'."
-                    ),
-                },
+            instructions=(
+                "Generate a short session title (4-6 words max) that captures the core topic "
+                "of this wellness conversation. No quotes, no punctuation at the end. "
+                "Examples: 'Work Stress and Burnout', 'Anxiety Around Relationships', "
+                "'Letting Go of Grief', 'Finding Inner Confidence'."
+            ),
+            input=[
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": assistant_reply},
             ],
-            max_tokens=20,
+            max_output_tokens=20,
             temperature=0.5,
         )
-        title = response.choices[0].message.content.strip().strip('"').strip("'")
+        title = response.output_text.strip().strip('"').strip("'")
         set_session_title(session_id=session_id, email=email, title=title)
         logger.info("Session title generated", extra={"session_id": session_id, "title": title})
     except Exception as e:
@@ -225,6 +245,15 @@ def get_embedding(text:str):
     )
 
     return response.data[0].embedding
+
+
+def get_embeddings(texts: list[str]) -> list[list[float]]:
+    """Batch-embed multiple texts in a single OpenAI call."""
+    response = openai_client.embeddings.create(
+        input=texts,
+        model="text-embedding-3-small"
+    )
+    return [item.embedding for item in response.data]
 
 def update_memory(user: str, memory: str):
     try:
@@ -251,8 +280,9 @@ def get_memory(user: str, memory: str):
         )
         value = []
         for match in results:
-            if 'text' in match['metadata']:
-                value.append(match['metadata']['text'])
+            text = (match.get("metadata", {}).get("text") or "").strip()
+            if text:
+                value.append(text)
         logger.info("Memory fetched", extra={"user": user, "results_count": len(value)})
         return {"long_term_memory": "\n".join(value)}
 
@@ -268,8 +298,9 @@ def get_journal_context(user: str, query: str):
         results = fetch_journal(email=user, vector=embedding, top_k=3)
         value = []
         for match in results:
-            if "text" in match.get("metadata", {}):
-                value.append(match["metadata"]["text"])
+            text = (match.get("metadata", {}).get("text") or "").strip()
+            if text:
+                value.append(text)
         logger.info("Journal context fetched", extra={"user": user, "results_count": len(value)})
         return {"journal_context": "\n".join(value)}
     except Exception as e:
@@ -277,23 +308,57 @@ def get_journal_context(user: str, query: str):
         raise e
 
 
-def get_kb_context(query: str, k: int = 3):
-    """Retrieve top-k relevant knowledge docs"""
+KB_CHUNK_SEPARATOR = "\n\n---\n\n"
+
+
+def get_kb_context(query: str, k: int = 5):
+    """Retrieve top-k relevant KB chunks, labeled by source section.
+
+    Each chunk is now a complete, self-contained "## [PREFIX-NN] Title" teaching
+    (see scripts/ingest_kb_markdown.py) spanning multiple paragraphs, not the old
+    single-line ~1200-char slice from chunk_text() — so chunks are joined with a
+    clear separator (never a bare "\\n", which the old chunk text never contained
+    but section text does) and labeled with their section_title so the model can
+    tell where one teaching ends and the next begins.
+
+    k defaults higher than before (5, was 3): the KB is now several companion
+    documents sharing one collection (journaling, money mindset, nervous-system/
+    boundaries work) rather than a single PDF, so a query has more ground to cover.
+
+    Returns (context_text_for_model, chunk_records). chunk_records is one dict per
+    matched chunk — {id, section_title, doc_title, text} — a full record of what
+    was actually retrieved, for kb_references (not for splitting context_text).
+    """
     try:
         embedding = get_embedding(query)
         results = fetch_kb(
             vector=embedding,
             top_k=k
         )
-        context = []
+
+        blocks = []
+        chunk_records = []
         for match in results:
-            if "text" in match["metadata"]:
-                context.append(match["metadata"]["text"])
-        logger.info("KB context fetched", extra={"query": query, "chunks": len(context)})
-        return "\n".join(context)
+            metadata = match.get("metadata", {})
+            text = (metadata.get("text") or "").strip()
+            if not text:
+                continue
+            section_title = metadata.get("section_title")
+            doc_title = metadata.get("doc_title")
+            label = section_title or doc_title
+            blocks.append(f"[{label}]\n{text}" if label else text)
+            chunk_records.append({
+                "id": match.get("id", ""),
+                "section_title": section_title,
+                "doc_title": doc_title,
+                "text": text,
+            })
+
+        logger.info("KB context fetched", extra={"query": query, "chunks": len(blocks)})
+        return KB_CHUNK_SEPARATOR.join(blocks), chunk_records
     except Exception as e:
         logger.error("[get_kb_context] Error", extra={"query": query, "error": str(e)})
-        return ""
+        return "", []
 
 def update_kb(doc_id: str, text: str):
     """Insert/update therapist knowledge docs into KB vector DB"""
@@ -358,17 +423,33 @@ def generate_ice_breakers(email: str, username: str = "") -> dict:
 
         user_content = "\n\n".join(context_parts) if context_parts else "No prior context available."
 
-        response = openai_client.chat.completions.create(
+        response = openai_client.responses.create(
             model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": ICE_BREAKER_PROMPT},
+            instructions=ICE_BREAKER_PROMPT,
+            input=[
                 {"role": "user", "content": user_content},
             ],
             temperature=0.9,
+            # Schema-enforced JSON instead of trusting the prompt's "return only valid JSON" —
+            # guarantees a parseable {"starters": [...]}. shape rather than hoping for one.
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "ice_breakers",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "starters": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["starters"],
+                        "additionalProperties": False
+                    },
+                    "strict": True
+                }
+            },
         )
 
-        raw = response.choices[0].message.content.strip()
-        result = json.loads(raw)
+        result = json.loads(response.output_text)
         starters = result.get("starters", [])
 
         logger.info("Ice breakers generated", extra={"email": email, "count": len(starters)})
@@ -414,7 +495,8 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
             "where the instructions above are written as \"she\" or \"her\"."
         )
         messages = [
-            {"role": "system", "content": mmd_system_prompt},
+            # mmd_system_prompt is passed via the top-level `instructions` param below, not as an
+            # input item — that's what it's for in the Responses API.
             {"role": "system", "content": TOOL_GROUNDING_INSTRUCTIONS},
             {"role": "system", "content": APP_FEATURE_REFERRAL_INSTRUCTIONS},
             {"role": "system", "content": KB_USAGE_INSTRUCTIONS},
@@ -424,6 +506,12 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
             {"role": "system", "content": user_context.strip()},
             *history_for_model,
         ]
+
+        # Static text, so it stays in the cached prefix — but only relevant (and only included) on
+        # the opening turn, where MATCH THEIR WEIGHT's "one-line, no pattern" default would otherwise
+        # suppress exactly the memory/journal callback _prefetch_user_context just fetched for it.
+        if not history:
+            messages.append({"role": "system", "content": OPENING_MESSAGE_INSTRUCTIONS})
 
         # Ground every substantive turn, and always the opening one — "hi" on turn 1 is exactly when
         # greeting them by what you remember matters. Only mid-conversation filler skips the lookup.
@@ -439,72 +527,63 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
 
         reply = None
         kb_references = []
+        cta = None
         for iteration in range(MAX_TOOL_ITERATIONS):
-            response = openai_client.chat.completions.create(
+            response = openai_client.responses.create(
                 model="gpt-5-mini",
-                messages=messages,
+                instructions=mmd_system_prompt,
+                input=messages,
                 tools=tools,
                 tool_choice="auto",
                 temperature=1.0,
                 # gpt-5-mini is a reasoning model and defaults to medium effort, which it pays on
                 # every hop of the tool loop. This is a chat persona doing retrieval, not a hard
                 # reasoning task — "low" cuts several seconds per hop.
-                reasoning_effort="low",
-                # Fewer output tokens is the other half of the latency win, and it reinforces the
-                # short chat-style replies RESPONSE_STYLE_INSTRUCTIONS asks for.
-                verbosity="low",
+                reasoning={"effort": "low"},
                 # Stable key so the long system-prompt prefix keeps hitting the same prompt cache.
                 prompt_cache_key="sanaya-chat-v1",
             )
 
-            result = response.choices[0]
+            function_calls = [item for item in response.output if item.type == "function_call"]
 
-            if result.finish_reason != "tool_calls":
-                reply = result.message.content
+            if not function_calls:
+                reply = response.output_text
                 break
 
-            tool_calls = result.message.tool_calls
-            # Every tool_call the model makes in this turn must get a matching "tool" response
-            # below, or the next request to OpenAI errors — so the assistant message here has to
-            # list all of them, not just the first one.
-            messages.append({
-                "role": "assistant",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    }
-                    for tc in tool_calls
-                ],
-            })
+            # Echo back everything the model produced this hop (function calls, and any reasoning
+            # items alongside them) — the Responses API is stateless per-call, so the next hop only
+            # has the reasoning context behind these calls if we hand the full output back to it.
+            messages.extend(response.output)
 
-            # Dispatch all of this turn's tools at once, then collect in the original order so each
-            # tool_call_id still lines up with its result.
+            # Dispatch all of this hop's tools at once, then collect in the original order so each
+            # call_id still lines up with its result.
             futures = []
-            for tool_call in tool_calls:
-                func_name = tool_call.function.name
-                func_args = json.loads(tool_call.function.arguments)
+            for fc in function_calls:
+                func_name = fc.name
+                func_args = json.loads(fc.arguments)
                 logger.info("Tool call triggered", extra={"email": email, "tool": func_name, "iteration": iteration})
-                futures.append((tool_call, _tool_executor.submit(_run_tool, email, func_name, func_args)))
+                futures.append((fc, _tool_executor.submit(_run_tool, email, func_name, func_args)))
 
-            for tool_call, future in futures:
+            for fc, future in futures:
                 try:
-                    tool_result_content, chunks = future.result()
-                    kb_references.extend(chunks)
+                    tool_result_content, reference, tool_cta = future.result()
+                    if reference:
+                        kb_references.append(reference)
+                    if tool_cta:
+                        cta = tool_cta
                 except Exception as e:
                     # One failed retrieval shouldn't kill the whole reply — tell the model and
                     # let it answer with what it does have.
                     logger.error(
                         "[chat_agent] Tool execution failed",
-                        extra={"email": email, "tool": tool_call.function.name, "error": str(e)},
+                        extra={"email": email, "tool": fc.name, "error": str(e)},
                     )
                     tool_result_content = json.dumps({"error": "Lookup failed, no data available."})
 
                 messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": tool_result_content
+                    "type": "function_call_output",
+                    "call_id": fc.call_id,
+                    "output": tool_result_content
                 })
 
         if not reply:
@@ -518,13 +597,14 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
             role="assistant",
             content=reply,
             kb_references=kb_references or None,
+            cta=cta,
         )
 
         if len(history) == 2:
             _title_executor.submit(_generate_and_set_title, session_id=session_id, email=email, user_message=message, assistant_reply=reply)
 
         logger.info("Reply generated", extra={"email": email, "session_id": session_id})
-        return {"success": True, "reply": reply, "session_id": session_id}
+        return {"success": True, "reply": reply, "session_id": session_id, "cta": cta}
 
     except Exception as e:
         logger.error("[chat_agent] Error", extra={"email": email, "error": str(e)})

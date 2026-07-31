@@ -41,3 +41,6 @@ r2_public_url = os.getenv("R2_PUBLIC_URL")
 gupshup_app_id = os.getenv("GUPSHUP_APP_ID")
 gupshup_token = os.getenv("GUPSHUP_TOKEN")
 gupshup_app_name = os.getenv("GUPSHUP_APP_NAME")
+
+chorma_tenant = os.getenv("CHROMA_TENANT")
+chroma_api = os.getenv("CHROMA_API")

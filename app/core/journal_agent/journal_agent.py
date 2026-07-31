@@ -4,7 +4,7 @@ from app.utils.env_load import openai_api_key
 from app.utils.logger_config import logger
 from app.services.db.journal_utils import save_journal_log, get_journal_logs
 from app.services.db.chat_session_utils import list_chat_sessions, get_session_messages
-from app.services.db.pinecone_utils import upsert_journal
+from app.services.db.chroma.utils import upsert_journal
 from app.core.agent import get_embedding, update_memory
 from app.core.journal_agent.journal_agent_utils import JOURNAL_SYSTEM_PROMPT, JOURNAL_PROMPTS_SYSTEM_PROMPT
 
