@@ -130,6 +130,9 @@ class TriggerWhatsappCampaignModel(BaseModel):
     media_id: Optional[str] = None   # Gupshup media id from a prior upload
     scheduled_at: Optional[int] = None  # unix epoch seconds (not ms) to send later instead of immediately; omit/past to send now
 
+class SendWhatsappReplyModel(BaseModel):
+    text: str
+
 class EditWhatsappTemplateModel(BaseModel):
     content: Optional[str] = None
     template_type: Optional[str] = None

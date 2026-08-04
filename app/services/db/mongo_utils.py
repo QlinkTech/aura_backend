@@ -20,8 +20,12 @@ phone_otps = db["phone_otps"]
 whatsapp_campaigns = db["whatsapp_campaigns"]
 whatsapp_campaign_messages = db["whatsapp_campaign_messages"]
 whatsapp_template_media = db["whatsapp_template_media"]
+whatsapp_messages = db["whatsapp_messages"]
+whatsapp_conversations = db["whatsapp_conversations"]
 webhook_events = db["webhook_events"]
 webhook_events.create_index("event_key", unique=True)
+whatsapp_messages.create_index("gupshup_message_id", unique=True, sparse=True)
+whatsapp_messages.create_index([("phone", 1), ("created_at", 1)])
 
 
 def return_system_prompt():

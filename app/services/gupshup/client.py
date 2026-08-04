@@ -77,6 +77,37 @@ def send_template_message(phone_number: str, template_id: str, params: list, med
     return message_id
 
 
+def send_session_message(phone_number: str, text: str) -> str:
+    """Sends a free-form text message to a number with an open 24h customer-service window
+    (i.e. one that has messaged us recently) — no approved template required. Returns the
+    Gupshup messageId. Gupshup rejects this outside the window, which callers should treat as
+    an expected error, not a bug."""
+    if not gupshup_app_id or not gupshup_token or not gupshup_app_name:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="WhatsApp service not configured")
+
+    url = f"https://partner.gupshup.io/partner/app/{gupshup_app_id}/msg"
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "token": gupshup_token,
+    }
+    data = {
+        "source": GUPSHUP_SOURCE,
+        "destination": phone_number,
+        "src.name": gupshup_app_name,
+        "message": json.dumps({"type": "text", "text": text}),
+    }
+
+    response = requests.post(url, headers=headers, data=data, timeout=10)
+    if not response.ok:
+        raise RuntimeError(f"Gupshup session message send failed ({response.status_code}): {response.text}")
+
+    body = response.json()
+    message_id = body.get("messageId") or body.get("message_id") or ""
+    if not message_id:
+        raise RuntimeError(f"Gupshup session message send returned no messageId: {body}")
+    return message_id
+
+
 def create_template(payload) -> dict:
     """Applies for a new WhatsApp message template on the Gupshup Partner API."""
     if not gupshup_app_id or not gupshup_token:
