@@ -15,8 +15,6 @@ management, WhatsApp messaging, and content.
 
 ## Architecture of Bot
 
-![Architecture Diagram](image.png)
-
 See [resources/ARCHITECTURE.md](resources/ARCHITECTURE.md) for the
 up-to-date component breakdown and data-flow diagrams — the image above
 is a legacy high-level sketch, kept for historical reference.
