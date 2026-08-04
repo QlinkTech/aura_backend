@@ -14,7 +14,7 @@ VALID_TIERS = {"daily", "high", "medium", "low", "inactive"}
 # Where scheduled-campaign poller failures get reported — not per-recipient send failures
 # (those are already tracked per-message in whatsapp_campaign_messages), only errors that
 # stop the poller/a scheduled run from completing at all.
-SCHEDULER_ALERT_EMAIL = "pratham@athams.com"
+SCHEDULER_ALERT_EMAIL = "clarateam@claraai.tech"
 
 
 def _alert_scheduler_error(context: str, error: str) -> None:

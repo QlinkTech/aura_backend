@@ -72,3 +72,5 @@ sequenceDiagram
 - `webhook_events` (unique on `event_key`) guards the payment webhook
   against duplicate delivery; the WhatsApp webhook instead de-duplicates
   messages via the unique/sparse index on `whatsapp_messages.gupshup_message_id`.
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

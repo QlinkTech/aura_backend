@@ -63,3 +63,5 @@ sequenceDiagram
   than trusting a possibly-stale `subscription_status` already on the
   profile — guards against a capture arriving after a stale/superseded
   `subscription.cancelled` webhook.
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

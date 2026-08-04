@@ -218,3 +218,5 @@ for the unused Pinecone integration living alongside it.
   sequential independent writes, not a Mongo multi-document transaction —
   acceptable for the current write patterns but worth knowing before
   adding logic that assumes atomicity across collections.
+
+<img src="assets/hue-bar.svg" width="100%" height="4" alt=""/>

@@ -307,3 +307,5 @@ sequenceDiagram
   implements an equivalent interface (including journal embeddings) but
   has no current callers. Anyone touching KB/RAG code should confirm
   which store is intended before extending either.
+
+<img src="assets/hue-bar.svg" width="100%" height="4" alt=""/>

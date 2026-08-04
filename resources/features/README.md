@@ -12,3 +12,5 @@ features get their own doc and the simpler ones share one:
 See also [../ARCHITECTURE.md](../ARCHITECTURE.md) for how these fit
 together system-wide, and [../DATABASE.md](../DATABASE.md) for the data
 each of them reads and writes.
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

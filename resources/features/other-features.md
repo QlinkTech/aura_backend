@@ -123,3 +123,5 @@ subscription access daily and runs any due scheduled WhatsApp campaigns
 every minute — see [whatsapp.md](whatsapp.md) and
 [ARCHITECTURE.md §3](../ARCHITECTURE.md#3-data-flow) for the "Background
 jobs" flow diagram.
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

@@ -48,3 +48,5 @@ memory as grounding context for its replies, but EFT, guided
 visualization, and journaling are separate routes/agents a user enters
 directly (not a mid-conversation handoff from this agent) — see
 [other-features.md](other-features.md) for those.
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

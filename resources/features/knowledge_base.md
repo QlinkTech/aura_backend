@@ -53,3 +53,5 @@ flowchart LR
   what the chat agent would retrieve for a given query, separate from
   the retrieval that happens automatically during chat (see
   [chat.md](chat.md)).
+
+<img src="../assets/hue-bar.svg" width="100%" height="4" alt=""/>

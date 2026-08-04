@@ -64,3 +64,5 @@ Please install the following tools:
 ### Misc Notes
 
 - If you want to ignore "Line too long" errors for a specific file, because you either don't like how `ruff` formats it (or isn't able to), you can add a comment at the top of the file: `# ruff: noqa: E501` which will ignore that specific error for that file. This is not recommended, but we don't want to waste time fixing line lengths but be conscious that your code may be harder to read.
+
+<img src="resources/assets/hue-bar.svg" width="100%" height="4" alt=""/>

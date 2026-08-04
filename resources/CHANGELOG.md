@@ -82,4 +82,4 @@ _Author: Pratham Paleriya_
 ### Changed
 - **Modernized the assistant's underlying model-calling integration** to a more current, structured calling method. Session-title generation and the "conversation starter" suggestions now use schema-enforced output, reducing the chance of a malformed response causing a silent failure.
 
-<img src="resources/assets/hue-bar.svg" width="100%" height="4" alt=""/>
+<img src="assets/hue-bar.svg" width="100%" height="4" alt=""/>
