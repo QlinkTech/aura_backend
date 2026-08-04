@@ -17,7 +17,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = secret_key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60          # system/admin tokens (systems.py)
-USER_ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # end-user login/signup tokens
+USER_ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 3  # end-user login/signup tokens
 
 def hash_password(password):
     return pwd_context.hash(password)
