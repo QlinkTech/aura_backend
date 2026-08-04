@@ -1,10 +1,25 @@
+# Aura Server
 
+Backend for Aura, an AI companion app for emotional regulation and
+manifestation practices (chat, journaling, guided visualization, EFT
+tapping, vision boards, voice) with an admin dashboard for user
+management, WhatsApp messaging, and content.
+
+## Documentation
+
+- [Changelog](resources/CHANGELOG.md)
+- [System Architecture](resources/ARCHITECTURE.md)
+- [Database](resources/DATABASE.md)
+- [Features](resources/features/README.md)
+- [Third-Party Licenses](THIRD-PARTY-LICENSES.md)
 
 ## Architecture of Bot
 
-This diagram represents the architecture of the system:
-
 ![Architecture Diagram](image.png)
+
+See [resources/ARCHITECTURE.md](resources/ARCHITECTURE.md) for the
+up-to-date component breakdown and data-flow diagrams — the image above
+is a legacy high-level sketch, kept for historical reference.
 
 ## Getting Started
 
