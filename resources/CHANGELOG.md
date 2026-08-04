@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Admin Dashboard — WhatsApp Inbox] - 2026-08-05
+_Author: Pratham Paleriya_
+
+### Added
+- **Admins can now see and reply to WhatsApp messages from any user, in one place.** Previously there was no way to view what a user sent us on WhatsApp, or to write back — messages could only go out in bulk, via pre-approved templates (campaigns). The new inbox lists every conversation by most recent activity and shows the full message history per phone number, including images and other attachments the user sent. Replies are written as free text and work only inside WhatsApp's 24-hour reply window for that conversation; once that window closes, the admin is prompted to send an approved template instead, which reopens the window once the user responds. New messages and delivery updates (sent/delivered/read) appear immediately, with no need to refresh. *(Backend complete; live once the dashboard's frontend is wired up to it.)*
+
+---
+
+## [Account Access — Session Length] - 2026-08-04
+_Author: Pratham Paleriya_
+
+### Changed
+- **Users now stay signed in for 3 days instead of 1** before being asked to log in again. Applies to every login method (email/password, sign-up, and Google sign-in) — previously all of them expired after just one day, which meant unusually frequent re-logins for a normal usage pattern.
+
+---
+
 ## [Aura Persona — "Aura" system prompt draft] - 2026-07-31
 _Author: Pratham Paleriya_
 

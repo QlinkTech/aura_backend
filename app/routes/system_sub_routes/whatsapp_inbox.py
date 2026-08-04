@@ -1,14 +1,46 @@
+import asyncio
+import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
 from app.utils.schema import SendWhatsappReplyModel
 from app.services.auth_service import get_system_user
+from app.services import event_bus
 from app.services.db.whatsapp_inbox_utils import (
-    list_conversations, get_conversation_messages, mark_conversation_read, send_reply,
+    list_conversations, get_conversation_messages, mark_conversation_read, send_reply, EVENT_CHANNEL,
 )
 from app.utils.logger_config import logger
 
 whatsapp_inbox_router = APIRouter()
+
+_SSE_KEEPALIVE_SECONDS = 25
+
+
+@whatsapp_inbox_router.get("/whatsapp/inbox/events")
+async def stream_inbox_events(system_user: dict = Depends(get_system_user)):
+    """Live push of new messages and status updates across every conversation — see the "type":
+    "message" / "type": "status" event shapes documented in docs/whatsapp-inbox.md. All connected
+    admins share one channel (conversations aren't per-admin), unlike the per-user /events stream."""
+    admin = system_user.get("sub")
+    logger.info("WhatsApp inbox SSE client connected", extra={"admin": admin})
+
+    async def generator():
+        q = event_bus.subscribe(EVENT_CHANNEL)
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=_SSE_KEEPALIVE_SECONDS)
+                    yield {"data": json.dumps(event)}
+                except asyncio.TimeoutError:
+                    yield {"comment": "keepalive"}
+        except asyncio.CancelledError:
+            pass
+        finally:
+            event_bus.unsubscribe(EVENT_CHANNEL, q)
+            logger.info("WhatsApp inbox SSE client disconnected", extra={"admin": admin})
+
+    return EventSourceResponse(generator())
 
 
 @whatsapp_inbox_router.get("/whatsapp/inbox/conversations")

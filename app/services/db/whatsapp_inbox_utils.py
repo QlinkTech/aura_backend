@@ -2,13 +2,20 @@ import re
 import time
 from typing import Optional
 from fastapi import HTTPException, status
+from pymongo import ReturnDocument
 from app.services.db.mongo_utils import whatsapp_messages, whatsapp_conversations, user_profile
 from app.services.gupshup.client import send_session_message, list_templates
+from app.services import event_bus
 from app.utils.logger_config import logger
 
 # Meta's customer-service window: we may only free-form reply within this long of the user's
 # most recent inbound message; outside it, only an approved template can reach them.
 WINDOW_SECONDS = 24 * 60 * 60
+
+# Shared event_bus channel every connected admin subscribes to (see the SSE route in
+# whatsapp_inbox.py) — conversations aren't per-admin, so unlike the user-facing event_bus
+# usage elsewhere (keyed by user email), this is one constant key for every dashboard client.
+EVENT_CHANNEL = "system:whatsapp_inbox"
 
 # Same forward-only status lifecycle as campaign messages (see whatsapp_campaign_utils.py) —
 # kept as a separate copy since inbox and campaign messages are unrelated collections.
@@ -27,6 +34,46 @@ def _preview(msg_type: str, text: Optional[str]) -> str:
     if msg_type == "text" and text:
         return text[:200]
     return f"[{msg_type}]"
+
+
+def _message_view(doc: dict) -> dict:
+    """Same shape returned by get_conversation_messages, reused for the SSE payload so the
+    frontend can treat a pushed message identically to one fetched over the REST endpoint."""
+    return {
+        "id": str(doc["_id"]), "gupshup_message_id": doc.get("gupshup_message_id"),
+        "direction": doc["direction"], "message_type": doc["message_type"], "text": doc.get("text"),
+        "media_url": doc.get("media_url"), "media_id": doc.get("media_id"), "caption": doc.get("caption"),
+        "sender_name": doc.get("sender_name"), "status": doc.get("status"), "error": doc.get("error"),
+        "admin_username": doc.get("admin_username"), "created_at": doc.get("created_at"),
+    }
+
+
+def _conversation_view(conv: dict, email: Optional[str]) -> dict:
+    """Same shape returned by list_conversations' rows, reused for the SSE payload."""
+    return {
+        "phone": conv["phone"],
+        "contact_name": conv.get("contact_name"),
+        "email": email,
+        "last_message_at": conv.get("last_message_at"),
+        "last_message_preview": conv.get("last_message_preview"),
+        "last_direction": conv.get("last_direction"),
+        "unread_count": conv.get("unread_count", 0),
+        **_window_info(conv.get("last_inbound_at")),
+    }
+
+
+def _email_for_phone(phone: str) -> Optional[str]:
+    user = user_profile.find_one({"phone": phone}, {"_id": 0, "email": 1})
+    return user.get("email") if user else None
+
+
+def _publish_message_event(phone: str, message_doc: dict, conversation_doc: dict) -> None:
+    event_bus.publish(EVENT_CHANNEL, {
+        "type": "message",
+        "phone": phone,
+        "message": _message_view(message_doc),
+        "conversation": _conversation_view(conversation_doc, _email_for_phone(phone)),
+    })
 
 
 def store_inbound_message(
@@ -54,14 +101,16 @@ def store_inbound_message(
             {"gupshup_message_id": gupshup_message_id}, {"$setOnInsert": doc}, upsert=True,
         )
         is_new = result.upserted_id is not None
+        if is_new:
+            doc["_id"] = result.upserted_id
     else:
-        whatsapp_messages.insert_one(doc)
+        whatsapp_messages.insert_one(doc)  # pymongo sets doc["_id"] in place
         is_new = True
 
     if not is_new:
         return  # already recorded this message — don't double-count unread/preview
 
-    whatsapp_conversations.update_one(
+    conversation = whatsapp_conversations.find_one_and_update(
         {"_id": phone},
         {
             "$set": {
@@ -76,8 +125,10 @@ def store_inbound_message(
             "$inc": {"unread_count": 1},
         },
         upsert=True,
+        return_document=ReturnDocument.AFTER,
     )
     logger.info("Inbound WhatsApp message stored", extra={"phone": phone, "message_type": msg_type, "gupshup_message_id": gupshup_message_id})
+    _publish_message_event(phone, doc, conversation)
 
 
 def handle_inbound_native(event: dict) -> None:
@@ -140,6 +191,10 @@ def apply_inbox_status_event(ids: list, event_type: str, reason: str = None) -> 
         update["error"] = str(reason or "unknown")
     whatsapp_messages.update_one({"_id": msg["_id"]}, {"$set": update})
     logger.info("Inbox message status updated", extra={"gupshup_message_id": ids[0], "event": event_type})
+    event_bus.publish(EVENT_CHANNEL, {
+        "type": "status", "phone": msg["phone"], "message_id": str(msg["_id"]),
+        "status": event_type, "error": update.get("error"),
+    })
 
 
 def _window_info(last_inbound_at: Optional[int]) -> dict:
@@ -168,19 +223,7 @@ def list_conversations(search: Optional[str] = None, page_no: int = 1, page_size
         )
     }
 
-    results = []
-    for c in conversations:
-        results.append({
-            "phone": c["phone"],
-            "contact_name": c.get("contact_name"),
-            "email": emails_by_phone.get(c["phone"]),
-            "last_message_at": c.get("last_message_at"),
-            "last_message_preview": c.get("last_message_preview"),
-            "last_direction": c.get("last_direction"),
-            "unread_count": c.get("unread_count", 0),
-            **_window_info(c.get("last_inbound_at")),
-        })
-
+    results = [_conversation_view(c, emails_by_phone.get(c["phone"])) for c in conversations]
     return {"total": total, "page_no": page_no, "page_size": page_size, "conversations": results}
 
 
@@ -193,15 +236,7 @@ def get_conversation_messages(phone: str, page_no: int = 1, page_size: int = 50)
     total = whatsapp_messages.count_documents(query)
     cursor = whatsapp_messages.find(query).sort("created_at", -1).skip((page_no - 1) * page_size).limit(page_size)
 
-    messages = []
-    for doc in cursor:
-        messages.append({
-            "id": str(doc["_id"]), "gupshup_message_id": doc.get("gupshup_message_id"),
-            "direction": doc["direction"], "message_type": doc["message_type"], "text": doc.get("text"),
-            "media_url": doc.get("media_url"), "media_id": doc.get("media_id"), "caption": doc.get("caption"),
-            "sender_name": doc.get("sender_name"), "status": doc.get("status"), "error": doc.get("error"),
-            "admin_username": doc.get("admin_username"), "created_at": doc.get("created_at"),
-        })
+    messages = [_message_view(doc) for doc in cursor]
     messages.reverse()  # chronological, oldest first, even though we paged newest-first
 
     return {"total": total, "page_no": page_no, "page_size": page_size, "messages": messages}
@@ -247,15 +282,18 @@ def send_reply(phone: str, text: str, admin_username: Optional[str]) -> dict:
     message_id = send_session_message(phone_number=phone, text=text)
 
     now = int(time.time())
-    whatsapp_messages.insert_one({
+    message_doc = {
         "phone": phone, "direction": "outbound", "message_type": "text", "text": text,
         "media_url": None, "media_id": None, "caption": None, "sender_name": None,
         "gupshup_message_id": message_id, "status": "submitted", "error": None,
         "admin_username": admin_username, "created_at": now,
-    })
-    whatsapp_conversations.update_one(
+    }
+    whatsapp_messages.insert_one(message_doc)  # pymongo sets message_doc["_id"] in place
+    conversation = whatsapp_conversations.find_one_and_update(
         {"_id": phone},
         {"$set": {"last_message_at": now, "last_message_preview": _preview("text", text), "last_direction": "outbound", "updated_at": now}},
+        return_document=ReturnDocument.AFTER,
     )
     logger.info("Inbox reply sent", extra={"phone": phone, "admin_username": admin_username, "gupshup_message_id": message_id})
+    _publish_message_event(phone, message_doc, conversation)
     return {"phone": phone, "gupshup_message_id": message_id, "status": "submitted", "created_at": now}
