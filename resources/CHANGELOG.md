@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Account Access — Session Length] - 2026-08-05
+_Author: Pratham Paleriya_
+
+### Changed
+- **Users now stay signed in for 30 days instead of 3** before being asked to log in again. Applies to every login method (email/password, sign-up, and Google sign-in). This supersedes the 1→3 day change from the previous day, which was still too short for normal usage patterns.
+
+---
+
 ## [Admin Dashboard — WhatsApp Inbox] - 2026-08-05
 _Author: Pratham Paleriya_
 
