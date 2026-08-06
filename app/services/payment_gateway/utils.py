@@ -4,7 +4,7 @@ from app.services.db.mongo_utils import user_profile
 from app.services.payment_gateway.client import create_subscription, cancel_subscription, pause_subscription, fetch_subscription
 from app.utils.logger_config import logger
 
-FREE_PLAN_DURATION_DAYS = 30
+FREE_PLAN_DURATION_DAYS = 7
 
 # Subscription is active/paid — do not allow new subscription
 _PAID_STATUSES = {"active", "pending", "halted", "completed", "authenticated"}
