@@ -19,6 +19,7 @@ from app.utils.env_load import openai_api_key, elevenlabs_api_key
 from app.utils.logger_config import logger
 from app.core.agent import get_memory, get_journal_context
 from app.services import event_bus
+from app.services.gupshup.notifications import send_guided_viz_ready_whatsapp
 
 openai_client = OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
@@ -293,6 +294,7 @@ def generate_guided_viz(email: str, message: str, session_id: str, username: str
                     "body": "Tap to listen.",
                     "data": {"session_id": session_id, "audio_url": audio_url, "url": "https://app.regulatewithaura.com/visualization"},
                 })
+                send_guided_viz_ready_whatsapp(email, session_id)
                 return
             else:
                 logger.warning("Unknown guided viz tool", extra={"email": email, "session_id": session_id, "tool": func_name})

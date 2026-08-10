@@ -1,6 +1,7 @@
 from openai import OpenAI
 from app.utils.env_load import openai_api_key, cloud_api_key, cloud_api_secret, cloud_name
 from app.services.mail.client import send_vision_board_ready_email
+from app.services.gupshup.notifications import send_vision_board_ready_whatsapp
 from app.core.vision_board.vision_board_prompt import build_prompt
 from app.services.db.user_profile_utils import update_vision_board
 from app.services.db.mongo_utils import user_profile
@@ -88,6 +89,9 @@ def generate_vision_background(email: str, answers: dict, vibe: dict):
             logger.info("Vision board ready email sent", extra={"email": email})
         except Exception as mail_err:
             logger.warning("Skipping email error", extra={"email": email, "error": str(mail_err)})
+
+        #   WhatsApp (best-effort — never raises)
+        send_vision_board_ready_whatsapp(email)
 
     except Exception as e:
         logger.error("Error in generate_vision_background", extra={"email": email, "error": str(e)})

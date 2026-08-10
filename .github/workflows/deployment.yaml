@@ -92,6 +92,11 @@ jobs:
             GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }}
             GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }}
             GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }}
+            WA_TEMPLATE_GUIDED_VIZ_READY=${{ secrets.WA_TEMPLATE_GUIDED_VIZ_READY }}
+            WA_TEMPLATE_EFT_READY=${{ secrets.WA_TEMPLATE_EFT_READY }}
+            WA_TEMPLATE_VISION_BOARD_READY=${{ secrets.WA_TEMPLATE_VISION_BOARD_READY }}
+            WA_TEMPLATE_NEW_MASTERCLASS=${{ secrets.WA_TEMPLATE_NEW_MASTERCLASS }}
+            WA_TEMPLATE_NEW_RESOURCE=${{ secrets.WA_TEMPLATE_NEW_RESOURCE }}
             CHROMA_TENANT=${{ secrets.CHROMA_TENANT }}
             CHROMA_API=${{ secrets.CHROMA_API }}
             EOF

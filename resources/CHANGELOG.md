@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Notifications — WhatsApp Delivery] - 2026-08-10
+_Author: Pratham Paleriya_
+
+### Added
+- **Five notifications that previously only existed inside the web app now also arrive on WhatsApp.** Until now a user only found out that their guided visualisation, EFT tapping session or vision board had finished generating — or that a new masterclass or resource had gone live — if they happened to have the app open, or opened it again later. Since the generative ones take a few minutes, that often meant the user had already closed the tab and never came back to it. The same five moments are now sent to WhatsApp as short utility messages, for any user who has verified a phone number. Each one carries a button that opens the exact thing it's about — the specific visualisation or tapping session that just finished, the specific resource that just went live — rather than a generic landing page. The in-app notification is unchanged and still fires regardless — a WhatsApp failure never affects it. Users who never verified a number simply keep the in-app-only experience. *(Backend complete; the WhatsApp side stays dormant until Meta approves the five message templates — until then nothing is sent and nothing breaks.)*
+- **A masterclass broadcast on WhatsApp only goes out when there is genuinely something new to announce** — a new masterclass, or a change to its title or scheduled time. Correcting the meeting link, ID or password no longer messages everyone again. (The in-app notification still fires on every save, as before.)
+
+---
+
 ## [Account Access — Session Length] - 2026-08-05
 _Author: Pratham Paleriya_
 

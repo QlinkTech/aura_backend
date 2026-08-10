@@ -42,5 +42,15 @@ gupshup_app_id = os.getenv("GUPSHUP_APP_ID")
 gupshup_token = os.getenv("GUPSHUP_TOKEN")
 gupshup_app_name = os.getenv("GUPSHUP_APP_NAME")
 
+# Gupshup ids of the five notification templates (see app/services/gupshup/notifications.py).
+# Meta assigns each id only once the template is approved, so they live in env rather than in
+# code — an unset one just skips that WhatsApp notification, it never breaks the flow.
+# Run scripts/create_whatsapp_notification_templates.py to submit them and get the ids.
+guided_viz_ready_template_id = os.getenv("WA_TEMPLATE_GUIDED_VIZ_READY")
+eft_ready_template_id = os.getenv("WA_TEMPLATE_EFT_READY")
+vision_board_ready_template_id = os.getenv("WA_TEMPLATE_VISION_BOARD_READY")
+new_masterclass_template_id = os.getenv("WA_TEMPLATE_NEW_MASTERCLASS")
+new_resource_template_id = os.getenv("WA_TEMPLATE_NEW_RESOURCE")
+
 chorma_tenant = os.getenv("CHROMA_TENANT")
 chroma_api = os.getenv("CHROMA_API")

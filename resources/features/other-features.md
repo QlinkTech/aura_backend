@@ -96,6 +96,12 @@ via:
 | POST | `/api/user/notifications/{id}/read`, `/read-all` |
 | POST | `/api/system/notifications/send` (admin broadcast) |
 
+Five of those moments are also mirrored to WhatsApp
+(`gupshup/notifications.py`), for users who verified a phone number —
+guided viz ready, EFT session ready, vision board ready, new masterclass,
+new resource. See [whatsapp.md](whatsapp.md#notification-templates); the
+in-app notification is unaffected by whether the WhatsApp send succeeds.
+
 ## Masterclass & Resources
 
 Admin-managed content shown to users — a single "current masterclass"

@@ -147,3 +147,24 @@ POST /api/user/notifications/read-all
 ```json
 { "success": true, "marked_read": 3 }
 ```
+
+---
+
+## WhatsApp Mirror
+
+Five of these moments are also delivered over WhatsApp, to users who
+verified a phone number:
+
+| Event | WhatsApp |
+|---|---|
+| `guided_viz_complete` | ✅ |
+| `eft_complete` | ✅ |
+| vision board ready | ✅ (no SSE/DB notification — email + WhatsApp only) |
+| `new_masterclass` | ✅ (only when new/retitled/rescheduled) |
+| `new_resource` | ✅ |
+| `guided_viz_error`, `system_announcement` | ❌ in-app only |
+
+Nothing changes for the frontend: the SSE event and the stored
+notification fire exactly as before, whether or not the WhatsApp send
+succeeds. Backend detail in
+[../resources/features/whatsapp.md](../resources/features/whatsapp.md#notification-templates).

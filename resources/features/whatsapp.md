@@ -11,6 +11,8 @@ related but distinct capabilities:
 3. **Templates** — CRUD for the approved WhatsApp message templates
    (including attached media) that both inbox fallback replies and
    campaigns draw from.
+4. **Notifications** — the automatic, non-admin-triggered sends: the
+   WhatsApp mirror of five in-app notifications (see below).
 
 Also included: `whatsapp_webhook.py` — the single inbound endpoint
 Gupshup posts every event to (messages, delivery/read statuses),
@@ -62,6 +64,55 @@ sequenceDiagram
     WH->>Camp: apply_status_update() (if part of a campaign)
     Camp->>Camp: update per-recipient status + campaign stats
 ```
+
+## Notification templates
+
+`gupshup/notifications.py` mirrors five in-app notifications to WhatsApp,
+so a user who isn't in the web app still hears about them. All five are
+UTILITY-category templates, which is what lets them reach any verified
+number without a marketing opt-in.
+
+| Moment | Template | Fired from | Audience |
+|---|---|---|---|
+| Guided viz ready | `aura_visualisation_ready` | `guided_viz_agent` (background task) | that user |
+| EFT session ready | `aura_eft_ready` | `eft_agent` | that user |
+| Vision board ready | `aura_vision_board_ready` | `vision_board/genrate_vision_board` (background task) | that user |
+| New masterclass | `aura_new_masterclass` | `PUT /api/system/masterclass` | everyone with a phone |
+| New resource live | `aura_resource_added` | `POST /api/system/resources` | everyone with a phone |
+
+- Three of the buttons deep-link to the exact thing the message is about
+  — `?session=<id>` for guided viz and EFT, `?resource=<id>` for a
+  resource — through a variable at the tail of the button URL. Meta
+  numbers button variables separately from body ones (both start at
+  `{{1}}`), but the send API takes a single flat params list: body
+  variables first, button variables last. `aura_resource_added` therefore
+  sends `[name, category_label, resource_name, resource_id]`. Vision
+  board and masterclass need no id — there's only ever one of each per
+  user — so their buttons are static URLs.
+- Element names and languages are inconsistent across the five, and it's
+  an accident of Meta's locking rather than a decision. Deleting a
+  template blocks that name for up to four weeks across *both* English
+  variants, so the three deep-link ones were resubmitted under new names
+  (`aura_visualisation_ready`, `aura_resource_added`) and `en_GB`, while
+  the two that were never corrected kept their original names under
+  `en_US`. EFT is the odd one: `aura_eft_ready` came back from its delete
+  and got approved, so it's the one in use, and the `aura_tapping_ready`
+  submitted to replace it is a harmless unused twin. Nothing reads the
+  name or language at send time — the sender addresses templates by id —
+  so the only cost is that an element name no longer obviously matches
+  its `WA_TEMPLATE_*` variable.
+- Template ids come from env (`WA_TEMPLATE_*`) because Meta only issues
+  them on approval. An unset id skips that WhatsApp send and logs a
+  warning — the in-app notification is unaffected either way. Submit the
+  templates with `python -m scripts.create_whatsapp_notification_templates`.
+- The two broadcasts run through `whatsapp_campaign_utils` rather than a
+  loop of their own, so an automatic send gets the same per-recipient
+  delivery tracking, outage abort and dashboard retry as a hand-built
+  campaign. They show up in the campaigns list named `Auto · …`.
+- A masterclass broadcast only fires when the masterclass is new,
+  retitled, or rescheduled — editing the meeting link or password does
+  not re-notify (unlike the in-app notification, which still fires on
+  every `PUT`).
 
 **Notes:**
 - The inbox and campaigns share the same underlying Gupshup client and

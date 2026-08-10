@@ -2,11 +2,12 @@ import io
 import time
 import uuid
 from PIL import Image
-from fastapi import APIRouter, Body, File, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from bson import ObjectId
 from app.services.db.mongo_utils import resources
 from app.services.db.notification_utils import send_notification
+from app.services.gupshup.notifications import broadcast_new_resource_whatsapp
 from app.services.storage.r2_utils import generate_presigned_upload, delete_media, get_media_url, upload_media
 from app.services import event_bus
 from app.utils.logger_config import logger
@@ -89,7 +90,7 @@ def list_resources(category: str = Query(None)):
 
 
 @resources_router.post("/resources")
-def add_resource(data: dict = Body(...)):
+def add_resource(background_tasks: BackgroundTasks, data: dict = Body(...)):
     """
     Step 2 — call this after the file has been uploaded to R2.
     Body: { "name": "...", "category": "masterclass_vault|downloadables|audio", "description": "...", "r2_key": "...", "url": "..." }
@@ -139,6 +140,10 @@ def add_resource(data: dict = Body(...)):
         }
         for email in emails:
             event_bus.publish(email, sse_payload)
+
+        # Backgrounded — the broadcast sends serially to every recipient and must not hold the
+        # admin's request open.
+        background_tasks.add_task(broadcast_new_resource_whatsapp, name=name, category=category, resource_id=resource_id)
 
         return {"success": True, "id": resource_id}
     except Exception as e:

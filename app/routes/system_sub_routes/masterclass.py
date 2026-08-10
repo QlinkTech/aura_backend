@@ -1,8 +1,9 @@
 import time
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, BackgroundTasks, Body
 from fastapi.responses import JSONResponse
 from app.services.db.mongo_utils import masterclass as masterclass_col
 from app.services.db.notification_utils import send_notification
+from app.services.gupshup.notifications import broadcast_new_masterclass_whatsapp
 from app.services import event_bus
 from app.utils.logger_config import logger
 
@@ -27,7 +28,7 @@ def get_masterclass():
 
 
 @masterclass_router.put("/masterclass")
-def upsert_masterclass(data: dict = Body(...)):
+def upsert_masterclass(background_tasks: BackgroundTasks, data: dict = Body(...)):
     """Create or replace the masterclass. Always only one exists."""
     try:
         title = data.get("title", "").strip()
@@ -49,8 +50,15 @@ def upsert_masterclass(data: dict = Body(...)):
             "updated_at": int(time.time()),
         }
 
+        # Read before writing so we can tell an actual announcement from an edit to the one
+        # already announced — a WhatsApp broadcast costs money per recipient, so it only fires
+        # when the masterclass is new or has been retitled/rescheduled, never on a fix to the
+        # meeting link or password.
+        previous = masterclass_col.find_one(_FILTER, {"title": 1, "datetime": 1})
+        is_announcement = not previous or previous.get("title") != title or previous.get("datetime") != int(datetime_ts)
+
         masterclass_col.update_one(_FILTER, {"$set": doc}, upsert=True)
-        logger.info("System: masterclass upserted", extra={"title": title})
+        logger.info("System: masterclass upserted", extra={"title": title, "is_announcement": is_announcement})
 
         sse_payload = {
             "type": "new_masterclass",
@@ -61,6 +69,11 @@ def upsert_masterclass(data: dict = Body(...)):
         emails = send_notification(target="all", notif_type="new_masterclass", title="New Masterclass Available", body=title, data={"url": "https://app.regulatewithaura.com/events"})
         for email in emails:
             event_bus.publish(email, sse_payload)
+
+        if is_announcement:
+            # Backgrounded — the broadcast sends serially to every recipient and must not hold
+            # the admin's request open.
+            background_tasks.add_task(broadcast_new_masterclass_whatsapp, title=title, datetime_ts=int(datetime_ts))
 
         return {"success": True, "masterclass": {k: v for k, v in doc.items() if not k.startswith("_")}}
 
