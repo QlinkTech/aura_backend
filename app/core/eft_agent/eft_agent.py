@@ -1,11 +1,16 @@
 import io
 import json
+import re
 import uuid
 
 from openai import OpenAI
 from elevenlabs.client import ElevenLabs
 
-from app.core.eft_agent.eft_agent_utils import EFT_SYSTEM_PROMPT, EFT_TOOLS
+from app.core.eft_agent.eft_agent_utils import (
+    EFT_SYSTEM_PROMPT,
+    EFT_TOOLS,
+    TRANSLITERATION_SYSTEM_PROMPT,
+)
 from app.services.db.eft_utils import (
     create_eft_session,
     get_eft_session,
@@ -26,15 +31,64 @@ elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 EFT_VOICE_ID = "hnMOqbQV1aV5iom08kJd"
 
 MAX_TOOL_ITERATIONS = 3
+PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
+
+
+def _transliterate_to_devanagari(texts: list[str]) -> list[str]:
+    """Transliterate English script segments into Devanagari script (phonetic, not translated)
+    so the Hindi TTS voice pronounces the English words with a natural Indian accent.
+
+    On any failure or mismatch the original English text is returned unchanged.
+    """
+    if not texts:
+        return texts
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": TRANSLITERATION_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps({"segments": texts}, ensure_ascii=False)},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0,
+        )
+        data = json.loads(response.choices[0].message.content)
+        result = data.get("segments")
+
+        if isinstance(result, list) and len(result) == len(texts):
+            return [str(seg) for seg in result]
+
+        logger.warning(
+            "Transliteration returned mismatched segments; using original English",
+            extra={"expected": len(texts), "got": len(result) if isinstance(result, list) else None},
+        )
+    except Exception as e:
+        logger.error("Transliteration failed; using original English", extra={"error": str(e)})
+
+    return texts
+
+
+def _transliterate_script(script: str) -> str:
+    """Transliterate a full tapping script, paragraph by paragraph so no single request
+    has to carry the whole 2–4 minute script."""
+    paragraphs = [p for p in (p.strip() for p in PARAGRAPH_SPLIT_RE.split(script)) if p]
+    if not paragraphs:
+        return script
+    return "\n\n".join(_transliterate_to_devanagari(paragraphs))
 
 
 def _generate_and_store_audio(email: str, session_id: str, script: str) -> str:
     """Convert script to speech via ElevenLabs and upload to R2. Returns public URL."""
     logger.info("Generating EFT audio via ElevenLabs", extra={"email": email, "session_id": session_id})
 
+    # Transliterate the spoken English into Devanagari script so the TTS voice reads it
+    # with a natural Indian accent — same treatment as the guided visualization audio.
+    spoken_script = _transliterate_script(script)
+
     audio_chunks = elevenlabs_client.text_to_speech.convert(
         voice_id=EFT_VOICE_ID,
-        text=script,
+        text=spoken_script,
         model_id="eleven_multilingual_v2",
         output_format="mp3_44100_128",
     )
