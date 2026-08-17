@@ -2,9 +2,11 @@ import io
 import json
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from openai import OpenAI
 from elevenlabs.client import ElevenLabs
+from pydub import AudioSegment
 
 from app.core.eft_agent.eft_agent_utils import (
     EFT_SYSTEM_PROMPT,
@@ -31,24 +33,44 @@ elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 EFT_VOICE_ID = "hnMOqbQV1aV5iom08kJd"
 
 MAX_TOOL_ITERATIONS = 3
+
+# Any stray pause/XML markup the model emits is stripped — the voice would otherwise
+# read it aloud or stutter on it. Pacing comes from the writing, not from tags.
+BREAK_TAG_RE = re.compile(r"<[^>]{0,80}>")
 PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
+
+# Well under the ElevenLabs per-request character limit, so a full 9–10 minute
+# script is spoken in a handful of requests instead of one oversized one. Also keeps
+# each transliteration request small enough that the model reliably respells the whole
+# chunk instead of shortening it.
+MAX_TTS_CHARS = 1500
+
+DEVANAGARI_RE = re.compile(r"[ऀ-ॿ]")
+
+# A faithful transliteration is close to the source in length. Anything much shorter means
+# the model summarised or dropped text, so that chunk falls back to English.
+MIN_TRANSLITERATION_RATIO = 0.6
 
 
-def _transliterate_to_devanagari(texts: list[str]) -> list[str]:
-    """Transliterate English script segments into Devanagari script (phonetic, not translated)
-    so the Hindi TTS voice pronounces the English words with a natural Indian accent.
+def _transliterate_chunk(text: str) -> str:
+    """Respell one English script chunk in Devanagari letters — same English words,
+    phonetically written — so the Hindi TTS voice reads it with a natural Indian accent.
+    Not a translation.
 
-    On any failure or mismatch the original English text is returned unchanged.
+    One chunk per request: batching made the model merge segments, which failed the count
+    check and dropped the entire script back to English. On any failure the original
+    English text is returned, so a bad chunk costs only its own accent.
     """
-    if not texts:
-        return texts
+    if not text.strip():
+        return text
 
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": TRANSLITERATION_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps({"segments": texts}, ensure_ascii=False)},
+                {"role": "user", "content": json.dumps({"segments": [text]}, ensure_ascii=False)},
             ],
             response_format={"type": "json_object"},
             temperature=0.0,
@@ -56,44 +78,112 @@ def _transliterate_to_devanagari(texts: list[str]) -> list[str]:
         data = json.loads(response.choices[0].message.content)
         result = data.get("segments")
 
-        if isinstance(result, list) and len(result) == len(texts):
-            return [str(seg) for seg in result]
+        if not isinstance(result, list) or not result:
+            logger.warning("Transliteration returned no segment; using original English")
+            return text
 
-        logger.warning(
-            "Transliteration returned mismatched segments; using original English",
-            extra={"expected": len(texts), "got": len(result) if isinstance(result, list) else None},
-        )
+        # The model occasionally splits one input into several strings — joining them back
+        # is correct here, since the whole chunk is one continuous passage.
+        out = " ".join(str(seg) for seg in result).strip()
+
+        if not DEVANAGARI_RE.search(out):
+            logger.warning("Transliteration returned no Devanagari; using original English")
+            return text
+
+        if len(out) < len(text) * MIN_TRANSLITERATION_RATIO:
+            logger.warning(
+                "Transliteration suspiciously short; using original English",
+                extra={"source_chars": len(text), "result_chars": len(out)},
+            )
+            return text
+
+        return out
     except Exception as e:
         logger.error("Transliteration failed; using original English", extra={"error": str(e)})
 
-    return texts
+    return text
 
 
-def _transliterate_script(script: str) -> str:
-    """Transliterate a full tapping script, paragraph by paragraph so no single request
-    has to carry the whole 5 minute script."""
-    paragraphs = [p for p in (p.strip() for p in PARAGRAPH_SPLIT_RE.split(script)) if p]
-    if not paragraphs:
-        return script
-    return "\n\n".join(_transliterate_to_devanagari(paragraphs))
+def _chunk_script(script: str) -> list[str]:
+    """Split the script into TTS-sized chunks on paragraph boundaries (falling back to
+    sentence boundaries for any oversized paragraph), so the audio joins seamlessly."""
+    script = BREAK_TAG_RE.sub("", script)
+
+    pieces: list[str] = []
+    for para in (p.strip() for p in PARAGRAPH_SPLIT_RE.split(script)):
+        if not para:
+            continue
+        if len(para) <= MAX_TTS_CHARS:
+            pieces.append(para)
+            continue
+        # Paragraph too long for one request — pack its sentences into chunks.
+        current = ""
+        for sentence in SENTENCE_SPLIT_RE.split(para):
+            candidate = f"{current} {sentence}".strip()
+            if current and len(candidate) > MAX_TTS_CHARS:
+                pieces.append(current)
+                current = sentence.strip()
+            else:
+                current = candidate
+        if current:
+            pieces.append(current)
+
+    # Combine adjacent paragraphs while they still fit, to keep requests (and joins) few.
+    chunks: list[str] = []
+    for piece in pieces:
+        if chunks and len(chunks[-1]) + len(piece) + 1 <= MAX_TTS_CHARS:
+            chunks[-1] = f"{chunks[-1]} {piece}"
+        else:
+            chunks.append(piece)
+
+    return chunks or ([script.strip()] if script.strip() else [])
+
+
+def _elevenlabs_tts(text: str) -> bytes:
+    audio_chunks = elevenlabs_client.text_to_speech.convert(
+        voice_id=EFT_VOICE_ID,
+        text=text,
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128",
+    )
+    return b"".join(audio_chunks)
+
+
+def _speak_chunk(text: str) -> bytes:
+    """Respell one chunk in Devanagari letters, then speak it."""
+    return _elevenlabs_tts(_transliterate_chunk(text))
+
+
+def _build_voice_audio(script: str) -> bytes:
+    """Speak the script in TTS-sized chunks and join them back to back. Chunking keeps each
+    request under the per-request character limit that a full 9–10 minute script would
+    otherwise exceed; no silence is inserted, so the audio reads as one continuous take."""
+    chunks = _chunk_script(script)
+    if not chunks:
+        raise ValueError("EFT script is empty")
+
+    logger.info("Speaking EFT script in chunks", extra={"chunks": len(chunks), "chars": len(script)})
+
+    tts_results: dict[int, bytes] = {}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = {pool.submit(_speak_chunk, text): i for i, text in enumerate(chunks)}
+        for future in as_completed(futures):
+            tts_results[futures[future]] = future.result()
+
+    combined = AudioSegment.empty()
+    for i in range(len(chunks)):
+        combined += AudioSegment.from_mp3(io.BytesIO(tts_results[i]))
+
+    out = io.BytesIO()
+    combined.export(out, format="mp3", bitrate="128k")
+    return out.getvalue()
 
 
 def _generate_and_store_audio(email: str, session_id: str, script: str) -> str:
     """Convert script to speech via ElevenLabs and upload to R2. Returns public URL."""
     logger.info("Generating EFT audio via ElevenLabs", extra={"email": email, "session_id": session_id})
 
-    # Transliterate the spoken English into Devanagari script so the TTS voice reads it
-    # with a natural Indian accent — same treatment as the guided visualization audio.
-    spoken_script = _transliterate_script(script)
-
-    audio_chunks = elevenlabs_client.text_to_speech.convert(
-        voice_id=EFT_VOICE_ID,
-        text=spoken_script,
-        model_id="eleven_multilingual_v2",
-        output_format="mp3_44100_128",
-    )
-
-    audio_bytes = b"".join(audio_chunks)
+    audio_bytes = _build_voice_audio(script)
     key = f"eft_audio/{email}/{session_id}.mp3"
     url = upload_media(io.BytesIO(audio_bytes), key, content_type="audio/mpeg")
 
