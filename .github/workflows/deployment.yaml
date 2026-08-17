@@ -33,7 +33,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           export DOCKER_BUILDKIT=1
-          REGISTRY_PATH="syd.vultrcr.com/qlink01/aura_serve"
+          REGISTRY_PATH="blr.vultrcr.com/qlink01/aura_serve"
           docker build -t $REGISTRY_PATH:latest .
           docker push $REGISTRY_PATH:latest
 
