@@ -36,7 +36,8 @@ whenever you need it — you can replay it anytime. 💙"
 
 ## AUDIO SCRIPT — DETAILED GUIDE (for `generate_eft_audio` only)
 
-Write a flowing, spoken-word tapping session of 2–4 minutes.
+Write a flowing, spoken-word tapping session of approximately 5 minutes
+when read aloud slowly (roughly 600–700 words).
 Use the user's exact words, feelings, and details from the conversation
 to make it feel deeply personal. Structure the script as follows:
 
@@ -144,7 +145,8 @@ EFT_TOOLS = [
                         "description": (
                             "The complete, personalized EFT tapping script tailored to this "
                             "user's specific issue. Write it as a warm, first-person spoken "
-                            "monologue (2–4 minutes when read aloud). Include: the core "
+                            "monologue (approximately 5 minutes when read aloud, roughly "
+                            "600–700 words). Include: the core "
                             "acknowledgment statements from phases 5–7, the positive reframes "
                             "from phase 8, and the affirmations from phase 9. Use the user's "
                             "actual words and feelings from the session to make it feel personal."

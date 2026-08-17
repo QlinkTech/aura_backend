@@ -71,7 +71,7 @@ def _transliterate_to_devanagari(texts: list[str]) -> list[str]:
 
 def _transliterate_script(script: str) -> str:
     """Transliterate a full tapping script, paragraph by paragraph so no single request
-    has to carry the whole 2–4 minute script."""
+    has to carry the whole 5 minute script."""
     paragraphs = [p for p in (p.strip() for p in PARAGRAPH_SPLIT_RE.split(script)) if p]
     if not paragraphs:
         return script
