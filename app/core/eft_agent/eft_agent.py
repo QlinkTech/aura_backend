@@ -11,7 +11,7 @@ from pydub import AudioSegment
 from app.core.eft_agent.eft_agent_utils import (
     EFT_SYSTEM_PROMPT,
     EFT_TOOLS,
-    TRANSLITERATION_SYSTEM_PROMPT,
+    # TRANSLITERATION_SYSTEM_PROMPT,  # re-enable with _transliterate_chunk below
 )
 from app.services.db.eft_utils import (
     create_eft_session,
@@ -41,67 +41,71 @@ PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 
 # Well under the ElevenLabs per-request character limit, so a full 9–10 minute
-# script is spoken in a handful of requests instead of one oversized one. Also keeps
-# each transliteration request small enough that the model reliably respells the whole
-# chunk instead of shortening it.
+# script is spoken in a handful of requests instead of one oversized one.
 MAX_TTS_CHARS = 1500
 
-DEVANAGARI_RE = re.compile(r"[ऀ-ॿ]")
+# DEVANAGARI_RE = re.compile(r"[ऀ-ॿ]")
 
 # A faithful transliteration is close to the source in length. Anything much shorter means
 # the model summarised or dropped text, so that chunk falls back to English.
-MIN_TRANSLITERATION_RATIO = 0.6
+# MIN_TRANSLITERATION_RATIO = 0.6
 
 
-def _transliterate_chunk(text: str) -> str:
-    """Respell one English script chunk in Devanagari letters — same English words,
-    phonetically written — so the Hindi TTS voice reads it with a natural Indian accent.
-    Not a translation.
-
-    One chunk per request: batching made the model merge segments, which failed the count
-    check and dropped the entire script back to English. On any failure the original
-    English text is returned, so a bad chunk costs only its own accent.
-    """
-    if not text.strip():
-        return text
-
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": TRANSLITERATION_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps({"segments": [text]}, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0,
-        )
-        data = json.loads(response.choices[0].message.content)
-        result = data.get("segments")
-
-        if not isinstance(result, list) or not result:
-            logger.warning("Transliteration returned no segment; using original English")
-            return text
-
-        # The model occasionally splits one input into several strings — joining them back
-        # is correct here, since the whole chunk is one continuous passage.
-        out = " ".join(str(seg) for seg in result).strip()
-
-        if not DEVANAGARI_RE.search(out):
-            logger.warning("Transliteration returned no Devanagari; using original English")
-            return text
-
-        if len(out) < len(text) * MIN_TRANSLITERATION_RATIO:
-            logger.warning(
-                "Transliteration suspiciously short; using original English",
-                extra={"source_chars": len(text), "result_chars": len(out)},
-            )
-            return text
-
-        return out
-    except Exception as e:
-        logger.error("Transliteration failed; using original English", extra={"error": str(e)})
-
-    return text
+# DISABLED — the English script is now sent to ElevenLabs as-is. The Devanagari
+# transliteration (English words respelled in Devanagari so the voice reads them with an
+# Indian accent) kept drifting into Hindi translation. To re-enable: uncomment this, the
+# TRANSLITERATION_SYSTEM_PROMPT import, DEVANAGARI_RE, MIN_TRANSLITERATION_RATIO, and the
+# call in _speak_chunk.
+#
+# def _transliterate_chunk(text: str) -> str:
+#     """Respell one English script chunk in Devanagari letters — same English words,
+#     phonetically written — so the Hindi TTS voice reads it with a natural Indian accent.
+#     Not a translation.
+#
+#     One chunk per request: batching made the model merge segments, which failed the count
+#     check and dropped the entire script back to English. On any failure the original
+#     English text is returned, so a bad chunk costs only its own accent.
+#     """
+#     if not text.strip():
+#         return text
+#
+#     try:
+#         response = openai_client.chat.completions.create(
+#             model="gpt-4.1-mini",
+#             messages=[
+#                 {"role": "system", "content": TRANSLITERATION_SYSTEM_PROMPT},
+#                 {"role": "user", "content": json.dumps({"segments": [text]}, ensure_ascii=False)},
+#             ],
+#             response_format={"type": "json_object"},
+#             temperature=0.0,
+#         )
+#         data = json.loads(response.choices[0].message.content)
+#         result = data.get("segments")
+#
+#         if not isinstance(result, list) or not result:
+#             logger.warning("Transliteration returned no segment; using original English")
+#             return text
+#
+#         # The model occasionally splits one input into several strings — joining them back
+#         # is correct here, since the whole chunk is one continuous passage.
+#         out = " ".join(str(seg) for seg in result).strip()
+#
+#         if not DEVANAGARI_RE.search(out):
+#             logger.warning("Transliteration returned no Devanagari; using original English")
+#             return text
+#
+#         if len(out) < len(text) * MIN_TRANSLITERATION_RATIO:
+#             logger.warning(
+#                 "Transliteration suspiciously short; using original English",
+#                 extra={"source_chars": len(text), "result_chars": len(out)},
+#             )
+#             return text
+#
+#         return out
+#     except Exception as e:
+#         logger.error("Transliteration failed; using original English", extra={"error": str(e)})
+#
+#     return text
 
 
 def _chunk_script(script: str) -> list[str]:
@@ -150,8 +154,10 @@ def _elevenlabs_tts(text: str) -> bytes:
 
 
 def _speak_chunk(text: str) -> bytes:
-    """Respell one chunk in Devanagari letters, then speak it."""
-    return _elevenlabs_tts(_transliterate_chunk(text))
+    """Speak one chunk. The English script is sent as-is — see the disabled
+    _transliterate_chunk above."""
+    # return _elevenlabs_tts(_transliterate_chunk(text))
+    return _elevenlabs_tts(text)
 
 
 def _build_voice_audio(script: str) -> bytes:
