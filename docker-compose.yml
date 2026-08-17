@@ -4,7 +4,7 @@
 # compose.yaml (build + --reload) instead.
 services:
   qlink:
-    image: syd.vultrcr.com/qlink01/aura_serve:latest
+    image: blr.vultrcr.com/qlink01/aura_serve:latest
     container_name: qlink
     restart: unless-stopped
     ports:
