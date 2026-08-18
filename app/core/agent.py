@@ -530,7 +530,7 @@ def chat_agent(email: str, message: str, session_id: str = None, username: str =
         cta = None
         for iteration in range(MAX_TOOL_ITERATIONS):
             response = openai_client.responses.create(
-                model="gpt-5-mini",
+                model="gpt-5.6-luna",
                 instructions=mmd_system_prompt,
                 input=messages,
                 tools=tools,
