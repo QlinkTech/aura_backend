@@ -7,12 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Admin Dashboard — Stats] - 2026-08-18
+_Author: Pratham Paleriya_
+
+### Changed
+- **The stats page now reports one clear answer per number instead of two conflicting ones.** It previously showed two parallel user breakdowns side by side that used the same words to mean different things — "free" meant "on the free plan" in one and "free plan expired" in the other, and manually-comped accounts were pulled out of their category in only one of the two. Both added up to the right total while disagreeing on every line, which made the page impossible to read honestly. There is now a single funnel: signed up only, abandoned checkout, on trial, trial expired, paying, cancelled-but-still-active, and churned. Every user falls into exactly one of these, and they always add up to the total.
+- **Feature usage is now comparable across features.** Each of chat, EFT tapping, guided visualization, vision board and journal reports the same three things — how many people used it, what share of the user base that is, and how often they came back — so they can be ranked against each other at a glance. Previously each feature reported a slightly different set of numbers.
+
+### Added
+- **Manually-granted (comped) accounts can now be left out of the numbers.** Team members, testers and friends given free access have never had to convert and their usage isn't customer behavior, so counting them quietly distorted every conversion and adoption figure. They are now excluded by default — still counted in the total user count and shown separately — with a toggle to fold them back in. On current data this is the difference between chat looking like 135 sessions and actually being 72 from real users.
+- **Every number on the page can be opened to see the people behind it.** Clicking any figure — trial expired, churned, dormant, anyone who has used the journal — lists those exact users with their contact details, so an admin can act on a number instead of just reading it.
+- **A "needs attention" list of things worth doing today**, each already carrying the users it refers to: trials expiring within seven days, subscriptions halted after repeated failed payments, cancelled accounts still inside their paid window, and any vision board or guided visualization that failed to generate.
+- **Revenue is now reported alongside usage** — total captured, this month's, average payment, success/failure rate on payment attempts, how many distinct people have ever paid, and the split across plans. Note that captured-payment counts still include the ₹1/₹5 gateway test transactions, which inflates the payment count without meaningfully affecting the revenue figure.
+- **A weekly and monthly active-user count, and a dormant count** — people who signed up but haven't opened anything in over a month.
+
+*(Backend complete; live once the dashboard's frontend is wired up to it.)*
+
+---
+
+## [Chat Assistant — Model Upgrade] - 2026-08-18
+_Author: Pratham Paleriya_
+
+### Changed
+- **The assistant now runs on a newer, more capable underlying model.** No change to its persona, rules or behavior instructions — the same guidance, better reasoning behind it.
+
+---
+
+## [EFT Tapping — Audio Generation] - 2026-08-17
+_Author: Pratham Paleriya_
+
+### Fixed
+- **Longer tapping sessions were being cut short in the audio.** The whole script was sent to the voice service in one request, and anything past its length limit was silently dropped — so a user could be left with audio that stops partway through the session. The script is now split at paragraph boundaries into pieces the service can handle and the audio is joined back together, with no gap inserted, so it plays as one continuous take regardless of length.
+
+### Changed
+- **Tapping sessions are now written to run about 5 minutes instead of 2–4**, giving a fuller session rather than one that ends before the user has settled into it.
+- **Reverted an attempt to give the tapping voice an Indian accent.** The approach respelled the English script in Devanagari letters so the voice would read English words with an Indian pronunciation, but it kept drifting into actually translating the words into Hindi, which is not what a user asked for. The script is now read as written in English while a better approach is found.
+
+---
+
+## [Chat Assistant — Question Pacing] - 2026-08-12
+_Author: Pratham Paleriya_
+
+### Changed
+- **The assistant no longer ends nearly every reply with a question.** Its persona instructions told it to close each message with a powerful question, and taken literally that turned conversations into an intake form — question after question, with the user doing all the work and never receiving anything back. Questions are now the deliberate exception rather than the default close: at most one per reply, never twice in a row, and roughly two or three across an entire conversation before it has to stop gathering and start actually coaching. Most replies now end by reflecting back what it's seeing, or by giving the person the teaching or practice they came for.
+
+---
+
 ## [Notifications — WhatsApp Delivery] - 2026-08-10
 _Author: Pratham Paleriya_
 
 ### Added
 - **Five notifications that previously only existed inside the web app now also arrive on WhatsApp.** Until now a user only found out that their guided visualisation, EFT tapping session or vision board had finished generating — or that a new masterclass or resource had gone live — if they happened to have the app open, or opened it again later. Since the generative ones take a few minutes, that often meant the user had already closed the tab and never came back to it. The same five moments are now sent to WhatsApp as short utility messages, for any user who has verified a phone number. Each one carries a button that opens the exact thing it's about — the specific visualisation or tapping session that just finished, the specific resource that just went live — rather than a generic landing page. The in-app notification is unchanged and still fires regardless — a WhatsApp failure never affects it. Users who never verified a number simply keep the in-app-only experience. *(Backend complete; the WhatsApp side stays dormant until Meta approves the five message templates — until then nothing is sent and nothing breaks.)*
 - **A masterclass broadcast on WhatsApp only goes out when there is genuinely something new to announce** — a new masterclass, or a change to its title or scheduled time. Correcting the meeting link, ID or password no longer messages everyone again. (The in-app notification still fires on every save, as before.)
+
+---
+
+## [Subscriptions — Free Plan Length] - 2026-08-07
+_Author: Pratham Paleriya_
+
+### Changed
+- **The free plan is 7 days again, after briefly being set to 30.** A configuration change had extended it to a full month, which is far longer than the intended trial and delayed the point at which anyone is asked to pay. Anyone who activated a free plan during that window keeps the longer access they were already given — the change applies to new activations only.
 
 ---
 
@@ -98,5 +152,18 @@ _Author: Pratham Paleriya_
 
 ### Changed
 - **Modernized the assistant's underlying model-calling integration** to a more current, structured calling method. Session-title generation and the "conversation starter" suggestions now use schema-enforced output, reducing the chance of a malformed response causing a silent failure.
+
+---
+
+## [Subscriptions — Plans & Lapsed Access] - 2026-07-30
+_Author: Pratham Paleriya_
+
+### Added
+- **A 1-month subscription plan is now available**, alongside the existing options.
+
+### Fixed
+- **Two subscription plans were pointing at the wrong plan IDs at the payment gateway**, meaning a checkout could be created against the wrong plan. Corrected.
+- **Users whose subscription had lapsed could keep their paid access indefinitely.** Access was only re-checked when a payment webhook happened to arrive, so a cancelled, paused or expired free plan whose window had passed often left the account still marked as paying. Access is now re-evaluated on every login and every authenticated request, using one shared rule, so it ends when it should. Importantly, cancelling does not cut access off early — someone who cancels but has already paid through to a future date keeps access until that date, since cancelling means "won't renew", not "ends now".
+- **Payment and subscription webhooks arriving out of order could leave an account in the wrong state.** Razorpay does not guarantee delivery order, so a later event could be overwritten by an earlier one arriving afterwards. Events are now reconciled against the gateway's own current state rather than trusted in arrival order.
 
 <img src="assets/hue-bar.svg" width="100%" height="4" alt=""/>
