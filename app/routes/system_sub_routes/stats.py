@@ -1,40 +1,108 @@
+import time
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from app.services.db.mongo_utils import (
     user_profile, chat_sessions, eft_sessions,
     guided_viz_sessions, journal_log, resources, notifications,
 )
+# Same resolver the admin user list uses, so the payment buckets reported here
+# line up exactly with the `payment_status` filter on GET /users.
+from app.routes.system_sub_routes.users import _resolve_payment_status
 from app.utils.logger_config import logger
 
 stats_router = APIRouter()
+
+# "This month" follows the IST calendar — the business's local month, not UTC's.
+# Fixed offset rather than ZoneInfo("Asia/Kolkata"): India has no DST, and the
+# slim runtime image ships no tzdata (same reasoning as gupshup/notifications.py).
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+# Statuses that mean real money changed hands at some point. Deliberately wider
+# than the "currently paying" set in access_sync.py — this is a "did they ever
+# convert" test, so it must survive the subscription later ending.
+_EVER_PAID_STATUSES = {"active", "authenticated", "charged", "completed"}
 
 
 def _avg(total: int, count: int, decimals: int = 2) -> float:
     return round(total / count, decimals) if count else 0
 
 
+def _month_start_ts() -> int:
+    """Epoch seconds at 00:00 IST on the 1st of the current month."""
+    now_ist = datetime.now(_IST)
+    return int(now_ist.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
+
+
 @stats_router.get("/stats")
 def get_stats():
     try:
         # ── Users ────────────────────────────────────────────────
-        total_users  = user_profile.count_documents({})
-        total_paid   = user_profile.count_documents({"is_paid": True})
+        # Every user-level number comes from one pass over the profiles rather
+        # than a dozen count_documents() round trips, because the interesting
+        # buckets (resolved payment status, "ever converted") are derived from
+        # several fields at once and can't be expressed as a plain Mongo filter.
+        now_ts       = int(time.time())
+        month_start  = _month_start_ts()
+
+        total_users = total_paid = 0
+        new_this_month = link_generated_not_paid = 0
+        active_subscriptions = granted_access = 0
+        cancelled_users = halted_users = 0
+        trial_active = trial_expired = unconverted = 0
+        sub_status_breakdown: dict = {}
+        payment_status_breakdown: dict = {}
+
+        for doc in user_profile.find({}, {
+            "is_paid": 1, "is_bypassed": 1, "subscription_status": 1,
+            "early_bird_sub_id": 1, "trial_end_at": 1, "paid_until": 1, "created_at": 1,
+        }):
+            total_users += 1
+
+            sub_status   = doc.get("subscription_status")
+            is_bypassed  = bool(doc.get("is_bypassed"))
+            trial_end_at = doc.get("trial_end_at") or 0
+            # "Did they ever actually pay", not "are they paying now" — a paid_until
+            # in the past still means a real payment happened.
+            ever_paid    = bool(doc.get("paid_until")) or sub_status in _EVER_PAID_STATUSES
+
+            if doc.get("is_paid"):
+                total_paid += 1
+            if (doc.get("created_at") or 0) >= month_start:
+                new_this_month += 1
+            if doc.get("early_bird_sub_id") and not doc.get("is_paid"):
+                link_generated_not_paid += 1
+
+            sub_status_breakdown[sub_status or "no_subscription"] = (
+                sub_status_breakdown.get(sub_status or "no_subscription", 0) + 1
+            )
+
+            resolved = _resolve_payment_status(doc)
+            payment_status_breakdown[resolved] = payment_status_breakdown.get(resolved, 0) + 1
+
+            if resolved == "active":
+                active_subscriptions += 1
+            if is_bypassed:
+                granted_access += 1
+            if sub_status == "cancelled":
+                cancelled_users += 1
+            if sub_status == "halted":
+                halted_users += 1
+
+            # A free trial is a trial_end_at window with no payment behind it —
+            # both the "free" plan and any trial that ran before a conversion.
+            if trial_end_at and not ever_paid:
+                if now_ts < trial_end_at:
+                    trial_active += 1
+                else:
+                    trial_expired += 1
+
+            # Unconverted: signed up, never paid, and not manually granted access.
+            # Includes people who never started a trial at all.
+            if not ever_paid and not is_bypassed:
+                unconverted += 1
+
         total_unpaid = total_users - total_paid
-
-        link_generated_not_paid = user_profile.count_documents({
-            "early_bird_sub_id": {"$exists": True},
-            "is_paid": False,
-        })
-
-        sub_status_breakdown = {
-            doc["_id"]: doc["count"]
-            for doc in user_profile.aggregate([
-                {"$group": {
-                    "_id": {"$ifNull": ["$subscription_status", "no_subscription"]},
-                    "count": {"$sum": 1},
-                }}
-            ])
-        }
 
         # ── Chat ─────────────────────────────────────────────────
         total_chat_sessions  = chat_sessions.count_documents({})
@@ -111,6 +179,39 @@ def get_stats():
         ]))
         gv_agg = gv_agg[0] if gv_agg else {}
 
+        # ── Vision Board ─────────────────────────────────────────
+        # Boards live on the user profile as `vision_board_url`, which doubles
+        # as the status field: "" / missing = never started, "preparing" =
+        # generation queued, "failed" = generation errored, anything else is
+        # the Cloudinary URL of a finished board. One board per user (the
+        # upload public_id is per-email), so counts are also user counts.
+        vb_counts = {
+            doc["_id"]: doc["count"]
+            for doc in user_profile.aggregate([
+                {"$project": {
+                    "status": {
+                        "$let": {
+                            "vars": {"url": {"$ifNull": ["$vision_board_url", ""]}},
+                            "in": {"$switch": {
+                                "branches": [
+                                    {"case": {"$eq": ["$$url", ""]},          "then": "not_started"},
+                                    {"case": {"$eq": ["$$url", "preparing"]}, "then": "preparing"},
+                                    {"case": {"$eq": ["$$url", "failed"]},    "then": "failed"},
+                                ],
+                                "default": "generated",
+                            }},
+                        }
+                    }
+                }},
+                {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+            ])
+        }
+
+        generated_vb   = vb_counts.get("generated", 0)
+        preparing_vb   = vb_counts.get("preparing", 0)
+        failed_vb      = vb_counts.get("failed", 0)
+        not_started_vb = vb_counts.get("not_started", 0)
+
         # ── Journal ───────────────────────────────────────────────
         total_journal = journal_log.count_documents({})
 
@@ -149,10 +250,18 @@ def get_stats():
         return {
             "users": {
                 "total":                   total_users,
-                "paid":                    total_paid,
+                "new_this_month":          new_this_month,
+                "active_subscriptions":    active_subscriptions,
+                "cancelled":               cancelled_users,
+                "halted":                  halted_users,
+                "granted_access":          granted_access,
+                "free_trial_active":       trial_active,
+                "free_trial_expired":      trial_expired,
+                "unconverted":             unconverted,
                 "unpaid":                  total_unpaid,
                 "link_generated_not_paid": link_generated_not_paid,
                 "subscription_breakdown":  sub_status_breakdown,
+                "payment_status_breakdown": payment_status_breakdown,
             },
             "features": {
                 "chat": {
@@ -180,6 +289,14 @@ def get_stats():
                     "completion_rate_%":     _avg(completed_gv * 100, total_gv, 1),
                     "active_users":          gv_agg.get("active_users", 0),
                     "avg_sessions_per_user": round(gv_agg.get("avg_sessions_per_user", 0), 2),
+                },
+                "vision_board": {
+                    "total_generated": generated_vb,
+                    "preparing":       preparing_vb,
+                    "failed":          failed_vb,
+                    "not_started":     not_started_vb,
+                    "adoption_rate_%": _avg(generated_vb * 100, total_users, 1),
+                    "success_rate_%":  _avg(generated_vb * 100, generated_vb + failed_vb, 1),
                 },
                 "journal": {
                     "total_entries":        total_journal,
