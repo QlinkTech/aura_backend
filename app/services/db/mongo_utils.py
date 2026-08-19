@@ -26,6 +26,9 @@ webhook_events = db["webhook_events"]
 webhook_events.create_index("event_key", unique=True)
 whatsapp_messages.create_index("gupshup_message_id", unique=True, sparse=True)
 whatsapp_messages.create_index([("phone", 1), ("created_at", 1)])
+# Content tracking: "who opened this" and "what did this user open".
+activity_log.create_index([("type", 1), ("ref_id", 1), ("created_at", -1)])
+activity_log.create_index([("email", 1), ("created_at", -1)])
 
 
 def return_system_prompt():

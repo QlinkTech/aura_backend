@@ -22,7 +22,10 @@ def list_resources(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        log_activity(current_user["email"], "resource_view")
+        # Browsing the library is not the same as opening something. These were
+        # both logged as "resource_view", which left ~95% of that event type
+        # carrying no content id and made real view counts meaningless.
+        log_activity(current_user["email"], "resource_list_view")
         query = {} if not category or category.lower() == "all" else {"category": category}
         skip = (page - 1) * limit
         total = resources.count_documents(query)
@@ -42,11 +45,31 @@ def list_resources(
 @user_resources_router.get("/resources/{resource_id}")
 def get_resource(resource_id: str, current_user=Depends(get_current_user)):
     try:
-        log_activity(current_user["email"], "resource_view", ref_id=resource_id)
         doc = resources.find_one({"_id": ObjectId(resource_id)}, {"r2_key": 0})
         if not doc:
             return JSONResponse({"error": "Resource not found"}, status_code=404)
+        # Logged after the lookup — a 404 is not a view.
+        log_activity(current_user["email"], "resource_view", ref_id=resource_id)
         return _serialize(doc)
     except Exception as e:
         logger.error("User: error fetching resource", extra={"id": resource_id, "error": str(e)})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@user_resources_router.post("/resources/{resource_id}/view")
+def track_resource_view(resource_id: str, current_user=Depends(get_current_user)):
+    """Record that this user opened this resource.
+
+    The list response carries each resource's public file URL, so a client can
+    play or download content without ever calling the detail endpoint. Without
+    this beacon that consumption is invisible. Safe to call every time the user
+    opens something — repeat calls are separate views by design.
+    """
+    try:
+        if not resources.find_one({"_id": ObjectId(resource_id)}, {"_id": 1}):
+            return JSONResponse({"error": "Resource not found"}, status_code=404)
+        log_activity(current_user["email"], "resource_view", ref_id=resource_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error("User: error tracking resource view", extra={"id": resource_id, "error": str(e)})
         return JSONResponse({"error": str(e)}, status_code=500)

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Admin Dashboard — Content Tracking] - 2026-08-19
+_Author: Pratham Paleriya_
+
+### Added
+- **It's now possible to see which users opened which piece of content, and when.** Admins can see every resource ranked by how many times it was opened and by how many distinct people, open any one of them to see exactly who those people were and when they last came back, and open any user to see their full content history. Categories and a "last N days" window can be applied, and content nobody has ever opened is listed too — on current data that's 13 of 20 pieces, which is the number actually worth acting on.
+
+### Fixed
+- **Opening the resources library was being recorded as if it were viewing a resource.** Both actions were logged under the same event name, so around 95% of recorded "views" were really just someone landing on the library tab with no indication of what, if anything, they went on to open. Browsing and opening are now recorded separately, and only genuine opens count toward the numbers above.
+- **A resource that doesn't exist no longer counts as a view** — the view was recorded before checking the content was actually there, so a broken link registered as engagement.
+
+*(Backend complete. Historical numbers are a floor, not a true measure: until the app starts reporting opens, content played straight from its file link was never recorded at all — expect counts to rise once that ships, which is better recording rather than a jump in usage.)*
+
+---
+
 ## [Admin Dashboard — Stats] - 2026-08-18
 _Author: Pratham Paleriya_
 
