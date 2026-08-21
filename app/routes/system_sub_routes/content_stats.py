@@ -39,17 +39,37 @@ def _names_for(emails: list) -> dict:
     }
 
 
+def _granted_access_emails() -> list:
+    """Emails of comped (manually granted) users — same set /stats parks aside."""
+    return [
+        doc["email"]
+        for doc in user_profile.find({"is_bypassed": True}, {"_id": 0, "email": 1})
+        if doc.get("email")
+    ]
+
+
 @content_stats_router.get("/content-stats")
 def content_stats(
     category: str = Query(None, description="Filter to one category, e.g. masterclass_vault"),
     days: int = Query(None, ge=1, description="Only count views from the last N days; omit for all time"),
     include_unopened: bool = Query(True, description="Include content nobody has opened yet"),
+    include_granted_access: bool = Query(
+        False,
+        description=(
+            "Include views by comped (manually granted) users. Default false, "
+            "matching /stats, so open counts reflect real customers only."
+        ),
+    ),
 ):
     """Every piece of content, with how many people opened it and when."""
     try:
         match = dict(_VIEW_MATCH)
         if days:
             match["created_at"] = {"$gte": int(time.time()) - days * 24 * 60 * 60}
+        if not include_granted_access:
+            # Comped users never had to convert, so their reading habits aren't
+            # customer behaviour — drop their events before anything is counted.
+            match["email"] = {"$nin": _granted_access_emails()}
 
         rows = list(activity_log.aggregate([
             {"$match": match},
@@ -104,6 +124,7 @@ def content_stats(
 
         return {
             "window_days":     days,
+            "include_granted_access": include_granted_access,
             "total_opens":     sum(c["opens"] for c in content),
             "content_count":   len(content),
             "never_opened":    sum(1 for c in content if c["opens"] == 0),
@@ -120,11 +141,19 @@ def content_viewers(
     resource_id: str = Query(..., description="Which piece of content to expand"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
+    include_granted_access: bool = Query(
+        False,
+        description="Same meaning as on /content-stats — keep it identical to the table's current scope.",
+    ),
 ):
     """Who opened this piece of content, and when."""
     try:
+        match = {**_VIEW_MATCH, "ref_id": resource_id}
+        if not include_granted_access:
+            match["email"] = {"$nin": _granted_access_emails()}
+
         rows = list(activity_log.aggregate([
-            {"$match": {**_VIEW_MATCH, "ref_id": resource_id}},
+            {"$match": match},
             {"$group": {
                 "_id":         "$email",
                 "opens":       {"$sum": 1},
@@ -142,6 +171,7 @@ def content_viewers(
             "resource_id": resource_id,
             "name":        meta.get("name", "(deleted resource)"),
             "category":    meta.get("category", ""),
+            "include_granted_access": include_granted_access,
             "total_opens": sum(r["opens"] for r in rows),
             "total":       len(rows),
             "page":        page,
